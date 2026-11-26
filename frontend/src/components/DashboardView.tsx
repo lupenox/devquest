@@ -140,7 +140,7 @@ export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge }:
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <h3 className="card-title" style={{ margin: 0 }}>
-            <Award size={18} color="#7aa2f7" /> 16-Technology Mastery Matrix
+            <Award size={18} color="#7aa2f7" /> {data.technologies.length}-Technology Mastery Matrix
           </h3>
           <button type="button" className="btn btn-sm" onClick={onGoToForge}>
             + Generate New zyBooks Module (Local Ollama)

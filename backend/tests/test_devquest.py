@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.db import get_conn, init_db
+from app.github_study import create_repo_interview_pack, get_github_status, list_github_repos, sync_github_profile
 from app.graders import grade_workspace_activity, materialize_workspace
 from app.main import app
 from app.rpg import calculate_par_bonus, sm2_next_review, xp_to_level
@@ -40,7 +41,7 @@ def test_rpg_math_and_sm2():
     assert reps2 == 0 and ivl2 == 1
 
 
-def test_dashboard_seeds_all_16_technologies(isolated_env):
+def test_dashboard_seeds_all_17_technologies(isolated_env):
     client = TestClient(app)
     resp = client.get("/api/dashboard")
     assert resp.status_code == 200
@@ -48,10 +49,10 @@ def test_dashboard_seeds_all_16_technologies(isolated_env):
     slugs = {t["slug"] for t in data["technologies"]}
     expected = {
         "neovim", "python", "fastapi", "bash", "typescript", "javascript",
-        "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex",
+        "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex", "debugging",
     }
     assert slugs == expected
-    assert data["total_activities"] >= 25
+    assert data["total_activities"] >= 30
     assert data["level"] == 1
 
 
@@ -420,3 +421,142 @@ def test_external_sync_and_exercism_import(isolated_env, tmp_path: Path):
             tech_slug="python",
         )
         assert imported["id"] == "exercism-python-two-fer"
+
+
+def test_debugging_graders_pdb_and_bash(isolated_env):
+    client = TestClient(app)
+    # Leftover breakpoint() should be caught cleanly
+    bp_res = _solve_and_grade(
+        client,
+        "dbg-101-nvim-lab",
+        {"buggy_eval.py": "def collect_scores(s, h=None):\n    breakpoint()\n    return [s]\n"},
+    )
+    assert bp_res["passed"] is False and "breakpoint()" in bp_res["output"]
+
+    # Properly fixed Python debugging lab passes
+    fixed_py = _solve_and_grade(
+        client,
+        "dbg-101-nvim-lab",
+        {
+            "buggy_eval.py": (
+                "def collect_scores(score, history=None):\n"
+                "    history = [] if history is None else history\n"
+                "    history.append(score)\n"
+                "    return history\n"
+                "def top_k_average(scores, k):\n"
+                "    if k <= 0 or not scores: return 0.0\n"
+                "    top = sorted(scores, reverse=True)[:k]\n"
+                "    return round(sum(top) / len(top), 4)\n"
+                "def safe_ratio(hits, total):\n"
+                "    return 0.0 if total == 0 else round(hits / total, 4)\n"
+            )
+        },
+    )
+    assert fixed_py["passed"] is True
+
+    # Bash set -x debugging lab passes
+    fixed_bash = _solve_and_grade(
+        client,
+        "dbg-102-nvim-lab",
+        {
+            "sum_col.sh": (
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "file=\"$1\"\n"
+                "awk -F, 'NR > 1 { s += $2 } END { print s + 0 }' \"$file\"\n"
+            )
+        },
+    )
+    assert fixed_bash["passed"] is True
+
+
+def test_github_connector_and_repo_interview_pack(isolated_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import base64
+
+    monkeypatch.setattr(config, "CURRICULUM_DIR", tmp_path / "curriculum")
+    sample_py = (
+        "from fastapi import FastAPI\n"
+        "app = FastAPI()\n"
+        "class OrderService:\n"
+        "    pass\n"
+        "@app.get('/orders')\n"
+        "def list_orders():\n"
+        "    return []\n"
+    )
+    b64_py = base64.b64encode(sample_py.encode()).decode()
+    b64_readme = base64.b64encode(b"# Sample FastAPI Service\nHandles orders cleanly.").decode()
+
+    def gh_handler(request: httpx.Request):
+        p = request.url.path
+        if p == "/user":
+            return httpx.Response(200, json={"login": "lupenox", "name": "Logan", "public_repos": 5, "total_private_repos": 2})
+        if p == "/user/repos":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "full_name": "lupenox/order-api",
+                        "name": "order-api",
+                        "owner": {"login": "lupenox"},
+                        "description": "FastAPI order service",
+                        "language": "Python",
+                        "private": False,
+                        "stargazers_count": 3,
+                        "updated_at": "2026-11-26T00:00:00Z",
+                        "default_branch": "main",
+                        "html_url": "https://github.com/lupenox/order-api",
+                        "topics": ["fastapi"],
+                    }
+                ],
+            )
+        if p == "/repos/lupenox/order-api":
+            return httpx.Response(
+                200,
+                json={
+                    "full_name": "lupenox/order-api",
+                    "description": "FastAPI order service",
+                    "language": "Python",
+                    "default_branch": "main",
+                    "html_url": "https://github.com/lupenox/order-api",
+                },
+            )
+        if p == "/repos/lupenox/order-api/languages":
+            return httpx.Response(200, json={"Python": 9000, "SQL": 1000})
+        if p == "/repos/lupenox/order-api/readme":
+            return httpx.Response(200, json={"content": b64_readme})
+        if p == "/repos/lupenox/order-api/git/trees/main":
+            return httpx.Response(
+                200,
+                json={
+                    "tree": [
+                        {"path": "app/main.py", "type": "blob"},
+                        {"path": "tests/test_orders.py", "type": "blob"},
+                    ]
+                },
+            )
+        if p == "/repos/lupenox/order-api/contents/app/main.py":
+            return httpx.Response(200, json={"content": b64_py})
+        return httpx.Response(404)
+
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    mock_client = httpx.Client(transport=httpx.MockTransport(gh_handler))
+
+    with get_conn() as conn:
+        st = get_github_status(conn, http_client=mock_client)
+        assert st["connected"] is True and st["username"] == "lupenox"
+
+        repos = list_github_repos(conn, http_client=mock_client)
+        assert len(repos) == 1 and repos[0]["full_name"] == "lupenox/order-api"
+
+        synced = sync_github_profile(conn, http_client=mock_client)
+        assert synced["ok"] is True and synced["xp_awarded"] == 15
+
+        pack = create_repo_interview_pack(conn, "https://github.com/lupenox/order-api", use_ollama=False, http_client=mock_client)
+        mod = pack["module"]
+        assert mod["id"] == "repo-interview-lupenox-order-api"
+        assert mod["kind"] == "repo_interview"
+        assert mod["tech_slug"] == "fastapi"
+        assert "list_orders" in pack["analysis"]["functions"]
+        assert "GET /orders" in pack["analysis"]["routes"]
+        assert len(mod["activities"]) == 3
+

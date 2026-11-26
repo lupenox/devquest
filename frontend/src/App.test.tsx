@@ -79,7 +79,7 @@ describe("DevQuest UI Components", () => {
         onGoToForge={vi.fn()}
       />
     );
-    expect(screen.getByText("16-Technology Mastery Matrix")).toBeInTheDocument();
+    expect(screen.getByText("2-Technology Mastery Matrix")).toBeInTheDocument();
     expect(screen.getByText("Python")).toBeInTheDocument();
     expect(screen.getByText("32%")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("tech-card-python"));

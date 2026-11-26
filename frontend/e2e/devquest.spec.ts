@@ -5,11 +5,11 @@ import path from "node:path";
 test("DevQuest full RPG + zyBooks + Live Neovim WebSocket grading flow", async ({ page, request }) => {
   await page.goto("/");
 
-  // 1. Verify HUD & all 16 technologies render on Mastery Dashboard
+  // 1. Verify HUD & all 17 technologies (including Debugging) render on Mastery Dashboard
   await expect(page.getByRole("heading", { name: "DevQuest" })).toBeVisible();
   for (const slug of [
     "neovim", "python", "fastapi", "bash", "typescript", "javascript",
-    "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex",
+    "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex", "debugging",
   ]) {
     await expect(page.getByTestId(`tech-card-${slug}`)).toBeVisible();
   }
@@ -79,7 +79,10 @@ def moving_average(values, window):
     });
   }
 
-  // 5. Verify Skill Tree, Boss Projects, and Sync & AI Forge tabs render cleanly
+  // 5. Verify Repo Interview Prep, Skill Tree, Boss Projects, and Sync & AI Forge tabs render cleanly
+  await page.getByRole("button", { name: /repo interview prep/i }).click();
+  await expect(page.getByText("Study Any GitHub Repo for Interviews")).toBeVisible();
+
   await page.getByRole("button", { name: /skill tree/i }).click();
   await expect(page.getByText("Developer RPG Skill Tree")).toBeVisible();
 

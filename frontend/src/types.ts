@@ -170,3 +170,28 @@ export interface OllamaModel {
   name: string;
   size: number;
 }
+
+export interface GitHubStatus {
+  connected: boolean;
+  auth_source: string;
+  username?: string;
+  name?: string;
+  avatar_url?: string;
+  public_repos?: number;
+  private_repos?: number;
+  error?: string;
+}
+
+export interface GitHubRepo {
+  full_name: string;
+  name: string;
+  owner: string;
+  description: string;
+  language: string;
+  private: boolean;
+  stargazers_count: number;
+  updated_at: string;
+  default_branch: string;
+  html_url: string;
+  topics: string[];
+}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
   Flame,
+  FolderGit2,
   GitBranch,
   LayoutDashboard,
   RefreshCw,
@@ -12,12 +13,13 @@ import { api, connectEvents } from "./api";
 import { BossProjectsView } from "./components/BossProjectsView";
 import { DashboardView } from "./components/DashboardView";
 import { ModuleView } from "./components/ModuleView";
+import { RepoInterviewView } from "./components/RepoInterviewView";
 import { SkillTreeView } from "./components/SkillTreeView";
 import { SyncAndForgeView } from "./components/SyncAndForgeView";
 import { TracksView } from "./components/TracksView";
 import type { DashboardData, GradeOutcome } from "./types";
 
-type Tab = "dashboard" | "tracks" | "tree" | "projects" | "forge";
+type Tab = "dashboard" | "tracks" | "repos" | "tree" | "projects" | "forge";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -134,6 +136,13 @@ export function App() {
         </button>
         <button
           type="button"
+          className={`nav-btn ${tab === "repos" && !activeModuleId ? "active" : ""}`}
+          onClick={() => { setActiveModuleId(null); setTab("repos"); }}
+        >
+          <FolderGit2 size={15} /> Repo Interview Prep
+        </button>
+        <button
+          type="button"
           className={`nav-btn ${tab === "tree" && !activeModuleId ? "active" : ""}`}
           onClick={() => { setActiveModuleId(null); setTab("tree"); }}
         >
@@ -180,6 +189,8 @@ export function App() {
           />
         ) : tab === "tracks" ? (
           <TracksView initialTech={selectedTech} onOpenModule={openModule} />
+        ) : tab === "repos" ? (
+          <RepoInterviewView onOpenModule={openModule} onUpdated={loadDashboard} />
         ) : tab === "tree" ? (
           <SkillTreeView onOpenModule={openModule} />
         ) : tab === "projects" ? (

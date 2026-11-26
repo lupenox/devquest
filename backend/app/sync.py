@@ -12,7 +12,7 @@ from .rpg import iso_now
 
 SUPPORTED_TECHS = {
     "neovim", "python", "fastapi", "bash", "typescript", "javascript",
-    "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex",
+    "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex", "debugging",
 }
 
 EXERCISM_TRACK_MAP = {
@@ -36,7 +36,7 @@ CODEWARS_LANG_MAP = {
 
 def save_external_profile(conn: sqlite3.Connection, provider: str, handle: str) -> dict[str, Any]:
     provider = provider.strip().lower()
-    if provider not in {"leetcode", "codewars", "exercism"}:
+    if provider not in {"leetcode", "codewars", "exercism", "github"}:
         raise ValueError(f"Unsupported provider: {provider}")
     conn.execute(
         """

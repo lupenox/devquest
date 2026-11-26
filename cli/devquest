@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT = Path("/home/lupenox/Projects/devquest")
+ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 API_URL = os.getenv("DEVQUEST_API_URL", "http://127.0.0.1:8765")

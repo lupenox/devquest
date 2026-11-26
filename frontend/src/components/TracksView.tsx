@@ -37,7 +37,7 @@ export function TracksView({ initialTech, onOpenModule }: Props) {
             className={`btn btn-sm ${activeTech === "all" ? "btn-primary" : ""}`}
             onClick={() => setActiveTech("all")}
           >
-            All 16 Technologies
+            All {techs.length} Technologies
           </button>
           {techs.map((t) => (
             <button

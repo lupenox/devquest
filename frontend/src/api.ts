@@ -1,8 +1,11 @@
 import type {
   DashboardData,
+  GitHubRepo,
+  GitHubStatus,
   GradeOutcome,
   LaunchWorkspaceResp,
   ModuleDetail,
+  ModuleSummary,
   OllamaModel,
   SkillTreeNode,
   Technology,
@@ -67,6 +70,22 @@ export const api = {
     req<{ daily_xp_target: number }>("/api/daily-goal", {
       method: "POST",
       body: JSON.stringify({ daily_xp_target: dailyXpTarget }),
+    }),
+  githubStatus: () => req<GitHubStatus>("/api/github/status"),
+  githubConnect: (username: string, token?: string) =>
+    req<GitHubStatus>("/api/github/connect", {
+      method: "POST",
+      body: JSON.stringify({ username, token: token || null }),
+    }),
+  githubRepos: (username?: string) =>
+    req<{ repos: GitHubRepo[] }>(
+      `/api/github/repos${username ? `?username=${encodeURIComponent(username)}` : ""}`
+    ),
+  githubStudyPacks: () => req<{ packs: ModuleSummary[] }>("/api/github/study-packs"),
+  githubAnalyze: (repo: string, useOllama = false, model?: string) =>
+    req<{ module: ModuleDetail; analysis: Record<string, any> }>("/api/github/analyze", {
+      method: "POST",
+      body: JSON.stringify({ repo, use_ollama: useOllama, model: model || null }),
     }),
 };
 

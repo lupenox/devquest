@@ -21,6 +21,7 @@ TECHNOLOGIES: list[dict] = [
     {"slug": "react", "name": "React", "category": "Frontend & Testing", "color": "#61DAFB", "icon": "atom"},
     {"slug": "playwright", "name": "Playwright", "category": "Frontend & Testing", "color": "#2EAD33", "icon": "bot"},
     {"slug": "regex", "name": "Regex", "category": "Data & Markup", "color": "#A855F7", "icon": "regex"},
+    {"slug": "debugging", "name": "Debugging", "category": "Dev Tools & Workflow", "color": "#EC4899", "icon": "bug"},
 ]
 
 

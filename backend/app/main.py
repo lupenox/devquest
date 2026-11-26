@@ -12,6 +12,13 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .db import award_xp, get_conn, get_dashboard_data, init_db
+from .github_study import (
+    create_repo_interview_pack,
+    get_github_status,
+    list_github_repos,
+    save_github_connection,
+    sync_github_profile,
+)
 from .graders import grade_browser_activity, grade_workspace_activity, materialize_workspace
 from .ollama_gen import generate_zybooks_module, list_ollama_models
 from .rpg import calculate_par_bonus, compute_mastery_pct, iso_now, sm2_next_review
@@ -104,6 +111,17 @@ class DailyGoalReq(BaseModel):
 class ExercismImportReq(BaseModel):
     tech_slug: str = "python"
     canonical_data: dict[str, Any]
+
+
+class GitHubConnectReq(BaseModel):
+    username: str = ""
+    token: str | None = None
+
+
+class GitHubAnalyzeReq(BaseModel):
+    repo: str
+    use_ollama: bool = False
+    model: str | None = None
 
 
 def _record_grade_outcome(
@@ -528,6 +546,8 @@ async def run_external_sync(req: SyncRunReq | None = None):
                     results.append(sync_codewars(conn, by_prov[prov]))
                 elif prov == "exercism":
                     results.append(sync_exercism(conn, by_prov.get("exercism")))
+                elif prov == "github":
+                    results.append(sync_github_profile(conn))
                 else:
                     results.append({"provider": prov, "ok": False, "error": "Handle not configured yet."})
             except Exception as exc:
@@ -569,6 +589,71 @@ async def ollama_generate(req: OllamaGenerateReq):
             raise HTTPException(status_code=502, detail=f"Ollama generation failed: {exc}")
     await hub.broadcast("module_generated", {"module_id": mod["id"], "tech_slug": mod["tech_slug"]})
     return {"module": mod}
+
+
+@app.get("/api/github/status")
+def github_status():
+    with get_conn() as conn:
+        return get_github_status(conn)
+
+
+@app.post("/api/github/connect")
+def github_connect(req: GitHubConnectReq):
+    with get_conn() as conn:
+        save_github_connection(conn, username=req.username, token=req.token)
+        return get_github_status(conn)
+
+
+@app.get("/api/github/repos")
+def github_repos(username: str | None = Query(default=None), limit: int = Query(default=40, ge=1, le=100)):
+    with get_conn() as conn:
+        try:
+            repos = list_github_repos(conn, username=username, limit=limit)
+            return {"repos": repos}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Failed to list GitHub repos: {exc}")
+
+
+@app.get("/api/github/study-packs")
+def github_study_packs():
+    with get_conn() as conn:
+        mods = conn.execute(
+            """
+            SELECT m.*,
+                   (SELECT COUNT(*) FROM activities a WHERE a.module_id = m.id) AS activity_count,
+                   (SELECT COUNT(*) FROM completions c JOIN activities a ON a.id = c.activity_id WHERE a.module_id = m.id) AS completed_count
+            FROM modules m
+            WHERE m.kind = 'repo_interview'
+            ORDER BY m.created_at DESC
+            """
+        ).fetchall()
+        out = []
+        for m in mods:
+            d = dict(m)
+            d["content"] = json.loads(d.pop("content_json"))
+            out.append(d)
+        return {"packs": out}
+
+
+@app.post("/api/github/analyze")
+async def github_analyze(req: GitHubAnalyzeReq):
+    with get_conn() as conn:
+        try:
+            res = create_repo_interview_pack(
+                conn,
+                repo_ref=req.repo,
+                use_ollama=req.use_ollama,
+                model=req.model,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"GitHub analysis failed: {exc}")
+    await hub.broadcast(
+        "module_generated",
+        {"module_id": res["module"]["id"], "tech_slug": res["module"]["tech_slug"]},
+    )
+    return res
 
 
 # Serve production React build when present

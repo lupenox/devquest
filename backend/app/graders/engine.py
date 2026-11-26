@@ -650,6 +650,24 @@ def _grade_playwright(ws_dir: Path, spec: dict[str, Any]) -> GradeResult:
         server.server_close()
 
 
+def _grade_debugging(ws_dir: Path, spec: dict[str, Any]) -> GradeResult:
+    """Grades debugging labs across Python (pdb), Bash (set -x), or C++ (gdb)."""
+    runtime = spec.get("runtime", "python")
+    if runtime == "bash":
+        return _grade_bash(ws_dir, spec)
+    if runtime == "cpp":
+        return _grade_cpp(ws_dir, spec)
+    # Guard against leftover breakpoint() calls in Python debugging labs
+    primary = ws_dir / spec.get("primary_file", "buggy.py")
+    if primary.exists() and "breakpoint(" in primary.read_text(encoding="utf-8"):
+        return GradeResult(
+            False,
+            0.0,
+            "Found an active `breakpoint()` call in your file. Remove `breakpoint()` once you finish debugging with pdb!",
+        )
+    return _grade_python_or_fastapi(ws_dir, spec)
+
+
 def grade_workspace_activity(grader_type: str, ws_dir: Path, spec: dict[str, Any]) -> GradeResult:
     dispatch = {
         "python": _grade_python_or_fastapi,
@@ -668,6 +686,7 @@ def grade_workspace_activity(grader_type: str, ws_dir: Path, spec: dict[str, Any
         "git": _grade_git,
         "neovim": _grade_neovim,
         "playwright": _grade_playwright,
+        "debugging": _grade_debugging,
     }
     fn = dispatch.get(grader_type)
     if not fn:

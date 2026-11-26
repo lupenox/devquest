@@ -1,0 +1,287 @@
+{
+  "modules": [
+    {
+      "id": "html-semantic-a11y-101",
+      "tech_slug": "html",
+      "title": "Semantic HTML5 & Accessible Forms",
+      "subtitle": "Write meaningful markup that screen readers, SEO, and Playwright love.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 5,
+      "order_index": 1,
+      "summary": "Replace div-soup with semantic landmarks (`<main>`, `<nav>`, `<article>`) and properly associated `<label for=...>` inputs.",
+      "tags": ["html", "accessibility", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Why Semantic Elements Matter",
+          "body": "Using `<button>`, `<nav>`, `<main>`, and `<label for=\"email\">` gives you built-in keyboard navigation, focus handling, accessibility roles, and rock-solid Playwright `getByRole()` selectors for free.",
+          "code_example": "<main>\n  <h1>Sign In</h1>\n  <form>\n    <label for=\"email\">Email</label>\n    <input id=\"email\" type=\"email\" required />\n    <button type=\"submit\">Continue</button>\n  </form>\n</main>"
+        }
+      ],
+      "activities": [
+        {
+          "id": "html-101-read-check",
+          "title": "Participation Activity: Label Association",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Which attribute on `<label>` explicitly connects it to `<input id=\"username\">`?",
+            "options": ["name=\"username\"", "for=\"username\"", "target=\"username\"", "aria-id=\"username\""],
+            "correct_index": 1,
+            "explanation": "`for` matches the input's `id`, making clicking the label focus the input and enabling `page.getByLabel(...)` in Playwright.",
+            "hint": "In React JSX this becomes `htmlFor`, in plain HTML it is shorter."
+          }
+        },
+        {
+          "id": "html-101-nvim-lab",
+          "title": "Neovim Lab: Build a Semantic Model-Eval Submission Form",
+          "activity_type": "nvim_lab",
+          "grader_type": "html",
+          "order_index": 1,
+          "xp_reward": 50,
+          "par_keystrokes": 85,
+          "spec": {
+            "primary_file": "index.html",
+            "instructions": "Edit `index.html` to include:\n1. A `<main>` landmark containing an `<h1>` with text `Eval Runner`.\n2. A `<form>` with `<label for=\"model-name\">` linked to `<input id=\"model-name\" required>`.\n3. A `<button type=\"submit\">Start Eval</button>`.",
+            "starter_files": {
+              "index.html": "<!doctype html>\n<html lang=\"en\">\n<body>\n  <!-- TODO: add semantic <main>, <h1>, <form>, <label>, <input>, and <button> -->\n</body>\n</html>\n"
+            },
+            "xpath_checks": [
+              {"desc": "<main> landmark", "xpath": "//main", "min_count": 1},
+              {"desc": "<h1> heading inside <main>", "xpath": "//main//h1", "min_count": 1, "text_contains": "Eval Runner"},
+              {"desc": "<label for='model-name'>", "xpath": "//form//label[@for='model-name']", "min_count": 1},
+              {"desc": "required <input id='model-name'>", "xpath": "//form//input[@id='model-name' and @required]", "min_count": 1},
+              {"desc": "submit button", "xpath": "//form//button[@type='submit']", "min_count": 1, "text_contains": "Start Eval"}
+            ],
+            "hints": [
+              "Nest `<h1>Eval Runner</h1>` and `<form>...</form>` inside `<main>...</main>`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "css-flexbox-grid-101",
+      "tech_slug": "css",
+      "title": "Modern CSS: Flexbox & Grid Layout",
+      "subtitle": "Center anything and build responsive multi-column dashboards cleanly.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 5,
+      "order_index": 1,
+      "summary": "Know when to pick 1D Flexbox vs 2D CSS Grid, and write clean responsive layout rules in Neovim.",
+      "tags": ["css", "flexbox", "grid", "zybooks"],
+      "external_resources": [
+        {"label": "Flexbox Froggy", "url": "https://flexboxfroggy.com/"},
+        {"label": "Grid Garden", "url": "https://cssgridgarden.com/"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 Flexbox (1D) vs Grid (2D)",
+          "body": "Use **Flexbox** (`display: flex`) for a single axis (navbars, button rows, centering a card). Use **CSS Grid** (`display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`) for responsive two-dimensional card grids with zero media queries!",
+          "code_example": ".navbar {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n.cards {\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 1rem;\n}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "css-101-fill-blank",
+          "title": "Participation Activity: Perfect Centering in Flexbox",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "prompt": "Fill in the two Flexbox properties that center a child horizontally and vertically.",
+            "template": ".center {\n  display: flex;\n  ___: center;\n  ___: center;\n}",
+            "blanks": [
+              {"accepted": ["justify-content", "align-items"], "hint": "Main-axis alignment"},
+              {"accepted": ["align-items", "justify-content"], "hint": "Cross-axis alignment"}
+            ],
+            "explanation": "`justify-content: center` aligns along the main axis and `align-items: center` aligns along the cross axis."
+          }
+        },
+        {
+          "id": "css-101-nvim-lab",
+          "title": "Neovim Lab: Dashboard Toolbar & Card Grid CSS",
+          "activity_type": "nvim_lab",
+          "grader_type": "css",
+          "order_index": 1,
+          "xp_reward": 50,
+          "par_keystrokes": 80,
+          "spec": {
+            "primary_file": "styles.css",
+            "instructions": "In `styles.css`:\n1. Style `.toolbar` with `display: flex`, `justify-content: space-between`, and `align-items: center`.\n2. Style `.skill-grid` with `display: grid`, `grid-template-columns` using `repeat(...)`, and a `gap` value.",
+            "starter_files": {
+              "styles.css": ".toolbar {\n  /* TODO: flexbox horizontal toolbar */\n}\n\n.skill-grid {\n  /* TODO: 2D CSS grid with gap */\n}\n"
+            },
+            "rule_checks": [
+              {
+                "selector": ".toolbar",
+                "properties": {
+                  "display": "^flex$",
+                  "justify-content": "^space-between$",
+                  "align-items": "^center$"
+                }
+              },
+              {
+                "selector": ".skill-grid",
+                "properties": {
+                  "display": "^grid$",
+                  "grid-template-columns": "repeat\\(",
+                  "gap": "\\d+"
+                }
+              }
+            ],
+            "hints": [
+              "For `.skill-grid`, try `grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;`"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "react-state-hooks-101",
+      "tech_slug": "react",
+      "title": "React Rendering, Immutable State & Functional Updates",
+      "subtitle": "Avoid stale closures and render clean UI from pure state.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "prereq_module_id": "javascript-async-101",
+      "summary": "Trace React state batching, understand why `setCount(c => c + 1)` beats `setCount(count + 1)` in batched updates, and build a pure React component in Neovim.",
+      "tags": ["react", "hooks", "zybooks"],
+      "external_resources": [
+        {"label": "Full Stack Open (React + TS + Playwright)", "url": "https://fullstackopen.com/en/"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 Batched Updates & Functional Updaters",
+          "body": "Inside a single event handler, `count` stays fixed to the snapshot from the current render. Calling `setCount(count + 1)` three times only increments by 1! Passing an updater function `setCount(prev => prev + 1)` queues each increment on the latest state.",
+          "code_example": "// Snapshot bug: 0 -> 1\nsetCount(count + 1);\nsetCount(count + 1);\n\n// Functional updater: 0 -> 2\nsetCount(c => c + 1);\nsetCount(c => c + 1);"
+        }
+      ],
+      "activities": [
+        {
+          "id": "react-101-trace",
+          "title": "Participation Activity: Trace State Batching",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Starting from `count = 5`, trace the value after each click handler finishes re-rendering.",
+            "code": [
+              "// Initial state: count = 5",
+              "function handleBuggyClick() {",
+              "  setCount(count + 1);",
+              "  setCount(count + 1);",
+              "}",
+              "function handleFunctionalClick() {",
+              "  setCount(c => c + 1);",
+              "  setCount(c => c + 2);",
+              "}"
+            ],
+            "steps": [
+              {"line": 3, "note": "Queues setting count to 5 + 1 = 6."},
+              {"line": 4, "note": "Snapshot `count` is still 5 -> queues 5 + 1 = 6 again!"},
+              {"line": 7, "note": "Starting from 5: updater receives 5 -> returns 6."},
+              {"line": 8, "note": "Next updater receives 6 -> returns 8."}
+            ],
+            "checkpoints": [
+              {"id": "buggy", "line": 4, "label": "Next `count` after handleBuggyClick() from 5", "expected": "6"},
+              {"id": "func", "line": 8, "label": "Next `count` after handleFunctionalClick() from 5", "expected": "8"}
+            ],
+            "explanation": "React snapshots state per render; functional updaters (`c => ...`) always chain off the latest queued value."
+          }
+        },
+        {
+          "id": "react-101-nvim-lab",
+          "title": "Neovim Lab: Pure SkillBadge React Component",
+          "activity_type": "nvim_lab",
+          "grader_type": "react",
+          "order_index": 1,
+          "xp_reward": 65,
+          "par_keystrokes": 95,
+          "spec": {
+            "primary_file": "SkillBadge.mjs",
+            "instructions": "Export a React component `SkillBadge({ name, mastery })` using `React.createElement` in `SkillBadge.mjs`:\n- Renders a `<div className=\"skill-badge\">` containing `<strong>{name}</strong>` and `<span data-tier={tier}>{mastery}%</span>`.\n- `tier` is `'master'` if `mastery >= 80`, `'adept'` if `mastery >= 40`, else `'novice'`.",
+            "starter_files": {
+              "SkillBadge.mjs": "import React from 'react';\n\nexport function SkillBadge({ name, mastery }) {\n  // TODO: compute tier ('master' | 'adept' | 'novice') and render div > strong + span\n  return React.createElement('div', { className: 'skill-badge' });\n}\n"
+            },
+            "test_code": "import assert from 'node:assert/strict';\nimport React from 'react';\nimport { renderToStaticMarkup } from 'react-dom/server';\nimport { SkillBadge } from './SkillBadge.mjs';\n\nconst html1 = renderToStaticMarkup(React.createElement(SkillBadge, { name: 'Python', mastery: 85 }));\nassert.match(html1, /class=\"skill-badge\"/);\nassert.match(html1, /<strong>Python<\\/strong>/);\nassert.match(html1, /data-tier=\"master\"/);\nassert.match(html1, /85%/);\n\nconst html2 = renderToStaticMarkup(React.createElement(SkillBadge, { name: 'Regex', mastery: 20 }));\nassert.match(html2, /data-tier=\"novice\"/);\n\nconst html3 = renderToStaticMarkup(React.createElement(SkillBadge, { name: 'SQL', mastery: 55 }));\nassert.match(html3, /data-tier=\"adept\"/);\nconsole.log('React component tests passed!');\n",
+            "hints": [
+              "Compute `const tier = mastery >= 80 ? 'master' : mastery >= 40 ? 'adept' : 'novice';`",
+              "Pass children as 3rd and 4th arguments to `React.createElement('div', { className: 'skill-badge' }, ...)`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "playwright-e2e-101",
+      "tech_slug": "playwright",
+      "title": "Playwright Locators, Auto-Waiting & Live E2E Automation",
+      "subtitle": "Write flake-free browser tests using user-facing role locators.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 7,
+      "order_index": 1,
+      "prereq_module_id": "html-semantic-a11y-101",
+      "summary": "Prefer `getByRole` and `getByLabel` over brittle CSS paths, and automate a live fixture page directly from Neovim!",
+      "tags": ["playwright", "testing", "e2e", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Resilient Locators & Auto-Waiting",
+          "body": "Brittle selectors like `div > div:nth-child(3) > span` break on any layout tweak. Playwright's `page.getByRole('button', { name: 'Run' })` and `page.getByLabel('Prompt')` mirror how real users interact and automatically wait for elements to become actionable.",
+          "code_example": "await page.getByLabel('Prompt').fill('Explain RAII');\nawait page.getByRole('button', { name: 'Submit' }).click();\nconst status = await page.getByTestId('status').textContent();"
+        }
+      ],
+      "activities": [
+        {
+          "id": "pw-101-read-check",
+          "title": "Participation Activity: Most Resilient Locator",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Which Playwright locator is recommended as the #1 priority for clicking a visible 'Deploy' button?",
+            "options": [
+              "page.locator('body > div > div:nth-child(2) > button')",
+              "page.getByRole('button', { name: 'Deploy' })",
+              "page.locator('.btn-blue-400')",
+              "page.waitForTimeout(3000) + page.click('button')"
+            ],
+            "correct_index": 1,
+            "explanation": "`getByRole('button', { name: 'Deploy' })` tests both accessibility semantics and user-visible text without hardcoded sleeps.",
+            "hint": "Playwright prioritizes ARIA role + accessible name."
+          }
+        },
+        {
+          "id": "pw-101-nvim-lab",
+          "title": "Neovim Lab: Automate a Live Local Page with Playwright",
+          "activity_type": "nvim_lab",
+          "grader_type": "playwright",
+          "order_index": 1,
+          "xp_reward": 75,
+          "par_keystrokes": 110,
+          "spec": {
+            "primary_file": "challenge.spec.mjs",
+            "fixture_html": "<!doctype html><html><body><h1>Prompt Lab</h1><label for='p'>Prompt</label><input id='p' /><button type='button' id='go'>Score</button><p data-testid='out'>idle</p><script>document.getElementById('go').addEventListener('click', () => { const v = document.getElementById('p').value.trim(); document.querySelector('[data-testid=\"out\"]').textContent = v ? 'Scored: ' + v.toUpperCase() : 'empty'; });</script></body></html>",
+            "instructions": "Complete `challenge.spec.mjs` to launch headless Chromium against `process.env.TARGET_URL`:\n1. Fill the `'Prompt'` input (via `getByLabel`) with `'hello nvim'`.\n2. Click the `'Score'` button (via `getByRole`).\n3. Assert `[data-testid='out']` text equals `'Scored: HELLO NVIM'`.",
+            "starter_files": {
+              "challenge.spec.mjs": "import assert from 'node:assert/strict';\nimport { chromium } from 'playwright';\n\nconst browser = await chromium.launch();\ntry {\n  const page = await browser.newPage();\n  await page.goto(process.env.TARGET_URL);\n  // TODO: fill 'Prompt' with 'hello nvim', click 'Score', and assert data-testid='out'\n  const out = await page.getByTestId('out').textContent();\n  assert.equal(out, 'Scored: HELLO NVIM');\n  console.log('Playwright E2E passed!');\n} finally {\n  await browser.close();\n}\n"
+            },
+            "hints": [
+              "Add `await page.getByLabel('Prompt').fill('hello nvim');`",
+              "Add `await page.getByRole('button', { name: 'Score' }).click();`"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

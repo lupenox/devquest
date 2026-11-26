@@ -1,0 +1,375 @@
+{
+  "modules": [
+    {
+      "id": "neovim-grammar-101",
+      "tech_slug": "neovim",
+      "title": "Neovim Grammar: Verbs, Text Objects & Counts",
+      "subtitle": "Stop mashing arrows and Backspace—speak Vim's composable verb + object language.",
+      "difficulty": "beginner",
+      "kind": "neovim_drill",
+      "estimated_minutes": 5,
+      "order_index": 1,
+      "summary": "Every Neovim edit is `<operator><motion/text-object>`: `ci\"` changes inside quotes, `daw` deletes a word + trailing space, `dt,` deletes up to a comma.",
+      "tags": ["neovim", "motions", "vimgolf"],
+      "sections": [
+        {
+          "title": "1.1 Composable Editing (`operator` + `text-object`)",
+          "body": "Instead of moving to the start of a string and hitting `x` ten times, put your cursor anywhere inside quotes and press `ci\"` (change inner quotes). Combine operators (`d`, `c`, `y`, `v`) with text objects (`iw`, `aw`, `i\"`, `i(`, `i{`, `ip`) to multiply editing speed.",
+          "code_example": "ci\"   -> change inside double quotes\nda(   -> delete around parentheses (including parens)\n5j    -> jump down 5 relative lines\n:%s/old/new/g -> substitute across entire buffer"
+        }
+      ],
+      "activities": [
+        {
+          "id": "nvim-101-read-check",
+          "title": "Participation Activity: Pick the Fastest Motion",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Your cursor is on the letter `o` in `model = \"old_model_v1\"`. Which 3-key command clears the string inside quotes and enters Insert mode?",
+            "options": ["dw", "ci\"", "diw", "x12"],
+            "correct_index": 1,
+            "explanation": "`ci\"` (change inside quotes) even jumps forward on the same line to the quotes automatically!",
+            "hint": "`c` = change, `i` = inner, `\"` = double quotes."
+          }
+        },
+        {
+          "id": "nvim-101-fill-blank",
+          "title": "Participation Activity: Vim Substitution Command",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 20,
+          "spec": {
+            "prompt": "Fill in the Ex command to replace every occurrence of `foo` with `bar` across the entire file.",
+            "template": ":___s/foo/bar/___",
+            "blanks": [
+              {"accepted": ["%"], "hint": "Range meaning entire buffer"},
+              {"accepted": ["g"], "hint": "Flag meaning all matches per line"}
+            ],
+            "explanation": "`:%s/foo/bar/g` replaces every match on every line in the file."
+          }
+        },
+        {
+          "id": "nvim-101-par-lab",
+          "title": "Neovim Par Drill: Refactor Config in <= 40 Keys",
+          "activity_type": "nvim_lab",
+          "grader_type": "neovim",
+          "order_index": 2,
+          "xp_reward": 55,
+          "par_keystrokes": 40,
+          "spec": {
+            "primary_file": "config.env",
+            "instructions": "Transform `config.env` using Neovim motions (`:%s`, `dd`, `ci=`):\n1. Replace every `staging` with `prod`\n2. Delete the `DEBUG_ONLY=true` line\n3. Change `PORT=3000` to `PORT=8765`\nBeat par (<= 40 keystrokes) for a +20 Vim Par Bonus!",
+            "starter_files": {
+              "config.env": "ENV=staging\nAPI_HOST=staging.internal\nDEBUG_ONLY=true\nPORT=3000\nLOG_TAG=staging-worker\n"
+            },
+            "expected_content": "ENV=prod\nAPI_HOST=prod.internal\nPORT=8765\nLOG_TAG=prod-worker",
+            "hints": [
+              "Run `:%s/staging/prod/g` first.",
+              "Use `/DEBUG` then `dd` to delete the debug line, then `f3C8765<Esc>` on PORT!"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "neovim-macros-102",
+      "tech_slug": "neovim",
+      "title": "Macros & Repeat (`.`, `qa...q`, `@a`)",
+      "subtitle": "Automate repetitive multi-line edits in seconds with recorded macros.",
+      "difficulty": "intermediate",
+      "kind": "neovim_drill",
+      "estimated_minutes": 6,
+      "order_index": 2,
+      "prereq_module_id": "neovim-grammar-101",
+      "summary": "Record an edit once into register `a` (`qa ... q`), replay with `@a`, and scale with `5@a` or visual `:normal @a`.",
+      "tags": ["neovim", "macros"],
+      "sections": [
+        {
+          "title": "2.1 Recording Clean Macros",
+          "body": "Always start a macro with a canonical anchor like `0` or `^` (beginning of line) and end with `j` (next line) so replaying `10@a` never drifts off alignment!",
+          "code_example": "qa        \" start recording into register a\nI\"<Esc>   \" insert opening quote at line start\nA\",<Esc>  \" append closing quote + comma at line end\nj         \" move down to next line\nq         \" stop recording\n3@a       \" replay 3 times!"
+        }
+      ],
+      "activities": [
+        {
+          "id": "nvim-102-macro-lab",
+          "title": "Neovim Macro Drill: Wrap List Items into Python Strings",
+          "activity_type": "nvim_lab",
+          "grader_type": "neovim",
+          "order_index": 0,
+          "xp_reward": 65,
+          "par_keystrokes": 32,
+          "spec": {
+            "primary_file": "items.txt",
+            "instructions": "Wrap every line in `items.txt` with double quotes and a trailing comma (e.g. `python` -> `\"python\",`). Try recording a macro `qa` on line 1 and replaying `4@a`!",
+            "starter_files": {
+              "items.txt": "python\nfastapi\nreact\nplaywright\nregex\n"
+            },
+            "expected_content": "\"python\",\n\"fastapi\",\n\"react\",\n\"playwright\",\n\"regex\",",
+            "hints": [
+              "Record `qa0i\"<Esc>A\",<Esc>jq` then run `4@a` — or even faster: `:%s/.*/\"&\",/`!"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "fastapi-foundations-101",
+      "tech_slug": "fastapi",
+      "title": "FastAPI Routes, Pydantic v2 & TestClient",
+      "subtitle": "Build typed REST APIs with automatic OpenAPI docs and request validation.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 7,
+      "order_index": 1,
+      "prereq_module_id": "python-comprehensions-101",
+      "summary": "Declare Pydantic request models, return proper HTTP status codes, and verify routes with FastAPI's `TestClient` right from Neovim.",
+      "tags": ["fastapi", "python", "api", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Pydantic Validation & Status Codes",
+          "body": "FastAPI inspects Python type annotations and Pydantic `BaseModel` schemas to parse JSON bodies, validate constraints (`Field(min_length=1, ge=0)`), and automatically return `422 Unprocessable Entity` on bad payloads.",
+          "code_example": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\nclass ItemIn(BaseModel):\n    name: str = Field(min_length=1)\n    price: float = Field(gt=0)\n\n@app.post('/items', status_code=201)\ndef create_item(item: ItemIn):\n    return {'id': 1, **item.model_dump()}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "fastapi-101-read-check",
+          "title": "Participation Activity: Automatic Validation Status",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "What HTTP status code does FastAPI automatically return when a client sends a JSON body that violates a Pydantic `BaseModel` constraint?",
+            "options": ["200 OK", "400 Bad Request", "422 Unprocessable Content", "500 Internal Server Error"],
+            "correct_index": 2,
+            "explanation": "FastAPI returns `422` with structured error locations detailing exactly which field failed validation.",
+            "hint": "It is the RFC standard status code for semantic validation errors."
+          }
+        },
+        {
+          "id": "fastapi-101-parsons",
+          "title": "Participation Activity: Wire a FastAPI POST Endpoint",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Order the lines to create a FastAPI app with a typed POST `/ping` route.",
+            "lines": [
+              "    return {'pong': payload.msg}",
+              "class Ping(BaseModel):",
+              "app = FastAPI()",
+              "@app.post('/ping')",
+              "    msg: str",
+              "def ping(payload: Ping):"
+            ],
+            "correct_order": [2, 1, 4, 3, 5, 0],
+            "valid_orders": [
+              [2, 1, 4, 3, 5, 0],
+              [1, 4, 2, 3, 5, 0]
+            ],
+            "explanation": "Define `app` and `Ping`, then decorate `ping(payload: Ping)` with `@app.post('/ping')`."
+          }
+        },
+        {
+          "id": "fastapi-101-nvim-lab",
+          "title": "Neovim Lab: Build a Typed Prompt Evaluation API",
+          "activity_type": "nvim_lab",
+          "grader_type": "fastapi",
+          "order_index": 2,
+          "xp_reward": 70,
+          "par_keystrokes": 130,
+          "spec": {
+            "primary_file": "api.py",
+            "instructions": "Build a FastAPI app in `api.py` exposing:\n1. `GET /health` -> `{\"status\": \"ok\"}`\n2. `POST /runs` (status `201`) accepting `RunCreate(model: str, score: float)` where `0.0 <= score <= 1.0`, storing runs in memory and returning `{\"id\": <1-based int>, \"model\": ..., \"score\": ...}`.\n3. `GET /runs/{run_id}` -> returns the run or raises `404` if missing.",
+            "starter_files": {
+              "api.py": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\nRUNS: dict[int, dict] = {}\n\n\nclass RunCreate(BaseModel):\n    model: str = Field(min_length=1)\n    score: float = Field(ge=0.0, le=1.0)\n\n\n# TODO: implement GET /health, POST /runs (201), and GET /runs/{run_id}\n"
+            },
+            "test_code": "from fastapi.testclient import TestClient\nimport api\n\ndef test_fastapi_endpoints():\n    api.RUNS.clear()\n    client = TestClient(api.app)\n    r = client.get('/health')\n    assert r.status_code == 200 and r.json() == {'status': 'ok'}\n\n    bad = client.post('/runs', json={'model': 'qwen', 'score': 1.5})\n    assert bad.status_code == 422\n\n    created = client.post('/runs', json={'model': 'qwen', 'score': 0.92})\n    assert created.status_code == 201\n    body = created.json()\n    assert body['id'] == 1 and body['model'] == 'qwen' and body['score'] == 0.92\n\n    fetched = client.get('/runs/1')\n    assert fetched.status_code == 200 and fetched.json()['score'] == 0.92\n\n    missing = client.get('/runs/999')\n    assert missing.status_code == 404\n",
+            "hints": [
+              "Compute `run_id = len(RUNS) + 1`, store `RUNS[run_id] = {'id': run_id, **payload.model_dump()}`.",
+              "Raise `HTTPException(status_code=404, detail='Not found')` when `run_id not in RUNS`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "bash-scripting-101",
+      "tech_slug": "bash",
+      "title": "Defensive Bash Scripting & Text Pipelines",
+      "subtitle": "Write crash-safe shell tools with strict mode, quoting, grep, and awk.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Prevent silent shell bugs with `set -euo pipefail`, double-quote variables, and process log streams cleanly.",
+      "tags": ["bash", "linux", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Unofficial Bash Strict Mode",
+          "body": "Starting scripts with `set -euo pipefail` stops immediately on any failing command (`-e`), errors on unset variables (`-u`), and ensures a failing command in the middle of a pipe isn't hidden (`-o pipefail`). Always double-quote `\"$var\"` to protect spaces!",
+          "code_example": "#!/usr/bin/env bash\nset -euo pipefail\nfile=\"${1:?missing input file}\"\ngrep -c 'ERROR' \"$file\" || true"
+        }
+      ],
+      "activities": [
+        {
+          "id": "bash-101-read-check",
+          "title": "Participation Activity: Why `-o pipefail` Matters",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Without `set -o pipefail`, what exit code does `false | true` return in Bash?",
+            "options": ["1 (failure)", "0 (success)", "127 (not found)", "2 (syntax error)"],
+            "correct_index": 1,
+            "explanation": "By default Bash only returns the exit status of the LAST command in a pipeline (`true` -> 0), silently swallowing failures earlier in the pipe!",
+            "hint": "Look at the rightmost command in `false | true`."
+          }
+        },
+        {
+          "id": "bash-101-fill-blank",
+          "title": "Participation Activity: Strict Mode Header",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 20,
+          "spec": {
+            "prompt": "Complete the Bash strict-mode header.",
+            "template": "set -___ -o ___",
+            "blanks": [
+              {"accepted": ["eu", "ue"], "hint": "exit on error + error on unset var"},
+              {"accepted": ["pipefail"], "hint": "propagate pipeline failures"}
+            ],
+            "explanation": "`set -eu -o pipefail` (or `set -euo pipefail`) catches silent errors immediately."
+          }
+        },
+        {
+          "id": "bash-101-nvim-lab",
+          "title": "Neovim Lab: Log Error Counter Script",
+          "activity_type": "nvim_lab",
+          "grader_type": "bash",
+          "order_index": 2,
+          "xp_reward": 60,
+          "par_keystrokes": 75,
+          "spec": {
+            "primary_file": "count_errors.sh",
+            "instructions": "Write a Bash script `count_errors.sh` taking a log filename as `$1`.\n- If `$1` is missing or the file does not exist, exit with code `1`.\n- Otherwise print ONLY the integer count of lines containing `ERROR` (print `0` if none).",
+            "starter_files": {
+              "count_errors.sh": "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: validate $1 exists, then print the number of lines containing ERROR\n"
+            },
+            "checks": [
+              {
+                "name": "counts errors in log",
+                "args": ["train.log"],
+                "fixture_files": {"train.log": "INFO start\nERROR oom\nINFO step 2\nERROR nan loss\n"},
+                "exit_code": 0,
+                "stdout_equals": "2"
+              },
+              {
+                "name": "zero errors returns 0",
+                "args": ["clean.log"],
+                "fixture_files": {"clean.log": "INFO ok\nINFO done\n"},
+                "exit_code": 0,
+                "stdout_equals": "0"
+              },
+              {
+                "name": "missing file exits 1",
+                "args": ["does_not_exist.log"],
+                "exit_code": 1
+              }
+            ],
+            "hints": [
+              "Check `[[ $# -ge 1 && -f \"$1\" ]] || exit 1`.",
+              "Remember `grep -c` exits with status 1 when count is 0! Use `grep -c 'ERROR' \"$1\" || true`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "git-branch-workflow-101",
+      "tech_slug": "git",
+      "title": "Git Internals: Branches, Commits & Clean Merges",
+      "subtitle": "Treat Git commits as an immutable DAG—branch, commit, and merge with confidence.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Understand HEAD and branch pointers, then complete a real sandbox Git branching quest graded directly on your repository history!",
+      "tags": ["git", "version-control", "zybooks"],
+      "external_resources": [
+        {"label": "Learn Git Branching", "url": "https://learngitbranching.js.org/"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 Branches Are Just Movable Pointers",
+          "body": "A Git branch is literally a 41-byte file holding a commit SHA. Creating a branch (`git switch -c feat/login`) is instantaneous because Git never copies files—it only moves pointers as you commit.",
+          "code_example": "git switch -c feat/metrics\n# edit files in Neovim\ngit add metrics.py\ngit commit -m \"Add training metrics\"\ngit switch main\ngit merge feat/metrics"
+        }
+      ],
+      "activities": [
+        {
+          "id": "git-101-read-check",
+          "title": "Participation Activity: What Is a Git Branch?",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Under the hood in `.git/refs/heads/`, what is a Git branch actually stored as?",
+            "options": [
+              "A full zip copy of the repository",
+              "A lightweight pointer to a specific commit hash",
+              "A list of diff patches from commit 1",
+              "A SQLite table of files"
+            ],
+            "correct_index": 1,
+            "explanation": "Branches are lightweight pointers to commit objects; commits point to parent commits forming a DAG.",
+            "hint": "Why can Git create a branch in 1 millisecond even on huge repos?"
+          }
+        },
+        {
+          "id": "git-101-sandbox-lab",
+          "title": "Real Git Sandbox Lab: Feature Branch & Merge",
+          "activity_type": "nvim_lab",
+          "grader_type": "git",
+          "order_index": 1,
+          "xp_reward": 65,
+          "par_keystrokes": 40,
+          "spec": {
+            "primary_file": "README.md",
+            "instructions": "Inside this sandbox git repository:\n1. Create and switch to branch `feat/neovim-docs`.\n2. Edit `README.md` in Neovim to add the line `Status: ready` and commit it.\n3. Switch back to `main` and merge `feat/neovim-docs` into `main` so working tree is clean.\n4. Save or run `<leader>qt` (`devquest check`) to verify your Git graph!",
+            "starter_files": {
+              "README.md": "# DevQuest Git Sandbox\n"
+            },
+            "setup_commands": [
+              "git init -b main",
+              "git config user.name 'DevQuest Learner'",
+              "git config user.email 'learner@devquest.local'",
+              "git add README.md",
+              "git commit -m 'Initial commit'"
+            ],
+            "git_checks": [
+              {"desc": "Currently on main branch", "cmd": "git rev-parse --abbrev-ref HEAD", "equals": "main"},
+              {"desc": "feat/neovim-docs branch exists", "cmd": "git branch --list feat/neovim-docs", "contains": "feat/neovim-docs"},
+              {"desc": "At least 2 commits on main", "cmd": "git rev-list --count HEAD", "min_int": 2},
+              {"desc": "README.md includes Status: ready", "cmd": "cat README.md", "contains": "Status: ready"},
+              {"desc": "Clean working tree (all changes committed)", "cmd": "git status --porcelain -- README.md", "equals": ""}
+            ],
+            "hints": [
+              "Run `git switch -c feat/neovim-docs`, edit README.md, `git add README.md && git commit -m 'Add status'`.",
+              "Then `git switch main && git merge feat/neovim-docs`."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

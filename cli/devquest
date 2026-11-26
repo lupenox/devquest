@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""DevQuest CLI — launch dashboard, open next challenge in Neovim, grade, and view RPG stats."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+ROOT = Path("/home/lupenox/Projects/devquest")
+BACKEND_DIR = ROOT / "backend"
+FRONTEND_DIR = ROOT / "frontend"
+API_URL = os.getenv("DEVQUEST_API_URL", "http://127.0.0.1:8765")
+
+
+def _api(method: str, path: str, body: dict | None = None) -> dict:
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(
+        f"{API_URL}{path}",
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        print(f"\033[31mDevQuest server is not reachable at {API_URL}.\033[0m")
+        print("Start it in another terminal with: \033[1mdevquest up\033[0m")
+        raise SystemExit(1) from exc
+
+
+def cmd_up(args: argparse.Namespace) -> None:
+    if not (FRONTEND_DIR / "dist").exists() and not args.dev:
+        print("Building DevQuest frontend bundle (first run)...")
+        subprocess.run(["npm", "run", "build"], cwd=str(FRONTEND_DIR), check=True)
+    host = args.host
+    port = str(args.port)
+    print(f"\033[36mDevQuest running at http://{host}:{port}\033[0m")
+    print("Keep this open while practicing in Neovim (:w auto-grades live!)")
+    subprocess.run(
+        ["uv", "run", "uvicorn", "app.main:app", "--host", host, "--port", port],
+        cwd=str(BACKEND_DIR),
+        check=True,
+    )
+
+
+def cmd_stats(_args: argparse.Namespace) -> None:
+    data = _api("GET", "/api/dashboard")
+    print(
+        f"\n\033[1;36mDevQuest RPG Sheet\033[0m  |  Lv.{data['level']}  |  "
+        f"\033[32m{data['total_xp']} XP\033[0m  |  Streak: {data['streak_days']}d  |  "
+        f"Today: {data['today_xp']}/{data['daily_xp_target']} XP\n"
+    )
+    print("─" * 78)
+    for t in data["technologies"]:
+        pct = int(round(t["mastery_pct"]))
+        filled = pct // 5
+        bar = "█" * filled + "░" * (20 - filled)
+        print(
+            f"{t['name']:<13} Lv.{t['level']:<2} [{bar}] {pct:>3}%  "
+            f"({t['xp']:>4} XP, {t['completed_activities']}/{t['total_activities']})  [{t['freshness']}]"
+        )
+    print("─" * 78)
+
+
+def cmd_next(args: argparse.Namespace) -> None:
+    params = {"mode": "nvim"}
+    if args.tech:
+        params["tech"] = args.tech.lower()
+    qs = urllib.parse.urlencode(params)
+    act = _api("GET", f"/api/next?{qs}")
+    ws = _api("POST", f"/api/activities/{urllib.parse.quote(act['id'])}/launch-nvim", {"reset": args.reset})
+    print(f"\033[1;36mQuest:\033[0m {act['title']} ({act['tech_slug']} • +{act['xp_reward']} XP)")
+    print(f"\033[1;33mWorkspace:\033[0m {ws['workspace_dir']}")
+    if args.print_only:
+        print(ws["nvim_command"])
+        return
+    os.chdir(ws["workspace_dir"])
+    os.execvp("nvim", ["nvim", ws["meta"]["primary_file"]])
+
+
+def cmd_check(_args: argparse.Namespace) -> None:
+    cwd = Path.cwd()
+    meta_file = cwd / ".devquest.json"
+    if not meta_file.exists():
+        print("\033[33mNot inside a DevQuest workspace (no .devquest.json found).\033[0m")
+        raise SystemExit(1)
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    res = _api("POST", "/api/grade", {"activity_id": meta["activity_id"], "workspace_dir": str(cwd)})
+    if res["passed"]:
+        print(f"\033[1;32m✓ PASSED!\033[0m +{res['xp_awarded']} XP ({res['tech_name']} {int(res['tech_mastery_pct'])}%)")
+    else:
+        print("\033[1;31m✗ FAILED\033[0m")
+    if res.get("output"):
+        print(res["output"])
+    raise SystemExit(0 if res["passed"] else 1)
+
+
+def cmd_sync(args: argparse.Namespace) -> None:
+    res = _api("POST", "/api/sync/run", {"provider": args.provider})
+    print(json.dumps(res["results"], indent=2))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="devquest", description="DevQuest Neovim RPG Learning CLI")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_up = sub.add_parser("up", help="Start DevQuest web app + API server")
+    p_up.add_argument("--host", default="127.0.0.1")
+    p_up.add_argument("--port", type=int, default=8765)
+    p_up.add_argument("--dev", action="store_true")
+    p_up.set_defaults(func=cmd_up)
+
+    p_stats = sub.add_parser("stats", help="Display RPG character sheet and 16 mastery bars")
+    p_stats.set_defaults(func=cmd_stats)
+
+    p_next = sub.add_parser("next", help="Open your next Neovim challenge lab")
+    p_next.add_argument("tech", nargs="?", default=None, help="Optional tech slug (e.g. python, fastapi, sql, regex)")
+    p_next.add_argument("--reset", action="store_true", help="Reset starter files before opening")
+    p_next.add_argument("--print-only", action="store_true", help="Print nvim command without launching")
+    p_next.set_defaults(func=cmd_next)
+
+    p_check = sub.add_parser("check", help="Grade current DevQuest workspace")
+    p_check.set_defaults(func=cmd_check)
+
+    p_sync = sub.add_parser("sync", help="Run external LeetCode/Codewars/Exercism sync")
+    p_sync.add_argument("provider", nargs="?", default=None)
+    p_sync.set_defaults(func=cmd_sync)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

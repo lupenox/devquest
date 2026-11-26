@@ -1,0 +1,397 @@
+{
+  "modules": [
+    {
+      "id": "python-comprehensions-101",
+      "tech_slug": "python",
+      "title": "Pythonic Iteration, Comprehensions & Generators",
+      "subtitle": "Master concise data pipelines and lazy evaluation without wasting memory.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Learn when to pick list comprehensions vs generator expressions, trace lazy evaluation step-by-step, and build a clean deduplication utility in Neovim.",
+      "tags": ["python", "generators", "zybooks"],
+      "external_resources": [
+        {"label": "Exercism Python Track", "url": "https://exercism.org/tracks/python"},
+        {"label": "Runestone Interactive Python", "url": "https://runestone.academy"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 List Comprehensions vs Generator Expressions",
+          "body": "A list comprehension `[x * 2 for x in nums]` eagerly allocates the full list in memory right away. Replacing square brackets with parentheses `(x * 2 for x in nums)` creates a lazy generator that computes one value at a time on demand—ideal when streaming huge datasets or AI training logs.",
+          "code_example": "nums = [1, 2, 3, 4]\neager = [n * n for n in nums if n % 2 == 0]   # [4, 16]\nlazy  = (n * n for n in nums if n % 2 == 0)   # generator object\ntotal = sum(lazy)                              # 20 (single pass!)"
+        },
+        {
+          "title": "1.2 Preserving Insertion Order with dict / set",
+          "body": "Since Python 3.7+, `dict` preserves insertion order. Tracking seen items in a `set` gives O(1) membership tests while yielding unique values in original order—much cleaner and faster than checking `if item not in result_list` (which is O(n²)).",
+          "code_example": "def unique_in_order(items):\n    seen = set()\n    for item in items:\n        if item not in seen:\n            seen.add(item)\n            yield item"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-101-read-check",
+          "title": "Participation Activity: Eager vs Lazy Memory",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "You need to compute the sum of squared errors over a 50-million-row training log stream. Which expression uses O(1) memory?",
+            "options": [
+              "sum([e * e for e in stream])",
+              "sum(e * e for e in stream)",
+              "len([e * e for e in stream])",
+              "list(map(lambda e: e * e, stream))"
+            ],
+            "correct_index": 1,
+            "explanation": "`sum(e * e for e in stream)` passes a generator expression directly to `sum()`, consuming values lazily in O(1) extra memory.",
+            "hint": "Brackets `[...]` build a full list in RAM before summing."
+          }
+        },
+        {
+          "id": "py-101-code-trace",
+          "title": "Participation Activity: Step-by-Step Code Trace",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Trace the generator and running total at each checkpoint below.",
+            "code": [
+              "def running_even(nums):",
+              "    acc = 0",
+              "    for n in nums:",
+              "        if n % 2 == 0:",
+              "            acc += n",
+              "            yield acc",
+              "g = running_even([3, 2, 5, 4, 6])",
+              "a = next(g)",
+              "b = next(g)",
+              "rest = list(g)"
+            ],
+            "steps": [
+              {"line": 7, "note": "Generator object `g` is created; body has NOT run yet."},
+              {"line": 8, "note": "Skips 3 (odd), hits 2 -> acc becomes 2 -> yields 2."},
+              {"line": 9, "note": "Resumes after yield: skips 5, hits 4 -> acc becomes 6 -> yields 6."},
+              {"line": 10, "note": "Consumes remaining items: hits 6 -> acc becomes 12 -> stops."}
+            ],
+            "checkpoints": [
+              {"id": "a", "line": 8, "label": "Value of `a`", "expected": "2"},
+              {"id": "b", "line": 9, "label": "Value of `b`", "expected": "6"},
+              {"id": "rest", "line": 10, "label": "Value of `rest`", "accepted": ["[12]", "[ 12 ]"]}
+            ],
+            "explanation": "Generators pause at each `yield` and preserve local variables like `acc` until the next call."
+          }
+        },
+        {
+          "id": "py-101-parsons",
+          "title": "Participation Activity: Assemble a Safe Deduplicator",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Order these lines to build `dedupe(items)` preserving first-seen order in O(n) time.",
+            "lines": [
+              "            out.append(x)",
+              "    seen = set()",
+              "    return out",
+              "def dedupe(items):",
+              "        if x not in seen:",
+              "    for x in items:",
+              "            seen.add(x)",
+              "    out = []"
+            ],
+            "correct_order": [3, 1, 7, 5, 4, 6, 0, 2],
+            "valid_orders": [
+              [3, 1, 7, 5, 4, 6, 0, 2],
+              [3, 7, 1, 5, 4, 6, 0, 2],
+              [3, 1, 7, 5, 4, 0, 6, 2],
+              [3, 7, 1, 5, 4, 0, 6, 2]
+            ],
+            "explanation": "Initialize `seen` and `out`, loop through `items`, add unseen elements to both, and return `out`."
+          }
+        },
+        {
+          "id": "py-101-nvim-lab",
+          "title": "Neovim Lab: Dedupe & Sliding Window Average",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 60,
+          "par_keystrokes": 90,
+          "spec": {
+            "primary_file": "solution.py",
+            "instructions": "Implement two functions in `solution.py`:\n1. `dedupe_preserve_order(items: list) -> list` returning unique items in first-seen order.\n2. `moving_average(values: list[float], window: int) -> list[float]` returning averages for each contiguous window of size `window` (raise `ValueError` if `window <= 0` or `window > len(values)`).",
+            "starter_files": {
+              "solution.py": "from __future__ import annotations\n\n\ndef dedupe_preserve_order(items: list) -> list:\n    # TODO: return unique items preserving first-seen order\n    raise NotImplementedError\n\n\ndef moving_average(values: list[float], window: int) -> list[float]:\n    # TODO: compute contiguous moving averages; validate window bounds\n    raise NotImplementedError\n"
+            },
+            "test_code": "import pytest\nfrom solution import dedupe_preserve_order, moving_average\n\ndef test_dedupe_basic():\n    assert dedupe_preserve_order([3, 1, 2, 1, 3, 4]) == [3, 1, 2, 4]\n    assert dedupe_preserve_order([]) == []\n    assert dedupe_preserve_order(['a', 'b', 'a']) == ['a', 'b']\n\ndef test_moving_average():\n    assert moving_average([2.0, 4.0, 6.0, 8.0], 2) == [3.0, 5.0, 7.0]\n    assert moving_average([10.0, 20.0, 30.0], 3) == [20.0]\n\ndef test_moving_average_errors():\n    with pytest.raises(ValueError):\n        moving_average([1.0, 2.0], 0)\n    with pytest.raises(ValueError):\n        moving_average([1.0, 2.0], 5)\n",
+            "hints": [
+              "Use `dict.fromkeys(items)` or a `seen = set()` loop for O(n) order-preserving deduplication.",
+              "For `moving_average`, check `if window <= 0 or window > len(values): raise ValueError(...)` first."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "python-leetcode-hashmap",
+      "tech_slug": "python",
+      "title": "LeetCode Kata: Hash Maps & Two-Sum Patterns",
+      "subtitle": "Turn O(n²) brute-force scans into O(n) complement lookups inside Neovim.",
+      "difficulty": "intermediate",
+      "kind": "kata",
+      "estimated_minutes": 8,
+      "order_index": 2,
+      "prereq_module_id": "python-comprehensions-101",
+      "summary": "Classic interview pattern: trade O(n) space in a dictionary for O(n) time lookup.",
+      "tags": ["leetcode", "algorithms", "python"],
+      "sections": [
+        {
+          "title": "2.1 Complement Lookup Pattern",
+          "body": "Instead of nested loops checking every pair `(i, j)`, store each seen value's index in a dictionary `index_by_val[val] = i`. Before storing, check whether `target - val` is already in `index_by_val`.",
+          "code_example": "seen = {}\nfor i, n in enumerate(nums):\n    need = target - n\n    if need in seen:\n        return [seen[need], i]\n    seen[n] = i"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-lc-two-sum-lab",
+          "title": "Neovim Kata: Two-Sum & Group Anagrams",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 0,
+          "xp_reward": 75,
+          "par_keystrokes": 110,
+          "spec": {
+            "primary_file": "kata.py",
+            "instructions": "Implement:\n1. `two_sum(nums: list[int], target: int) -> list[int]` returning the two indices `[i, j]` (`i < j`).\n2. `group_anagrams(words: list[str]) -> list[list[str]]` grouping anagrams together (order of groups/words normalized in tests).",
+            "starter_files": {
+              "kata.py": "from collections import defaultdict\n\n\ndef two_sum(nums: list[int], target: int) -> list[int]:\n    # TODO: O(n) complement lookup\n    return []\n\n\ndef group_anagrams(words: list[str]) -> list[list[str]]:\n    # TODO: group words sharing sorted character signature\n    return []\n"
+            },
+            "test_code": "from kata import two_sum, group_anagrams\n\ndef test_two_sum():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n    assert two_sum([3, 3], 6) == [0, 1]\n\ndef test_group_anagrams():\n    res = group_anagrams(['eat', 'tea', 'tan', 'ate', 'nat', 'bat'])\n    norm = sorted(sorted(g) for g in res)\n    assert norm == [['ate', 'eat', 'tea'], ['bat'], ['nat', 'tan']]\n",
+            "hints": [
+              "In `two_sum`, check `target - n in seen` BEFORE setting `seen[n] = i` so `[3, 3]` works!",
+              "In `group_anagrams`, use `''.join(sorted(w))` as the dict key."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "typescript-narrowing-101",
+      "tech_slug": "typescript",
+      "title": "Discriminated Unions & Exhaustive Type Narrowing",
+      "subtitle": "Model impossible states out of existence with tagged union types.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Build bug-proof state machines and API result wrappers using TypeScript discriminated unions and `never` exhaustiveness checks.",
+      "tags": ["typescript", "types", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Discriminated Unions",
+          "body": "When every member of a union shares a literal tag field (like `kind: 'ok' | 'err'`), TypeScript automatically narrows the exact properties available inside each `switch` or `if` branch.",
+          "code_example": "type ApiResult<T> =\n  | { ok: true; data: T }\n  | { ok: false; error: string };\n\nfunction unwrap<T>(r: ApiResult<T>, fallback: T): T {\n  return r.ok ? r.data : fallback;\n}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "ts-101-read-check",
+          "title": "Participation Activity: Exhaustiveness with `never`",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Why do TypeScript engineers assign the `default` branch of a `switch (event.kind)` to a `const _: never = event;` variable?",
+            "options": [
+              "To make JavaScript run faster at runtime",
+              "To trigger a compile-time error if a new union variant is added and forgotten",
+              "To cast `event` to `any`",
+              "To suppress null checks"
+            ],
+            "correct_index": 1,
+            "explanation": "If every union member is handled, the remaining type in `default` is `never`. Adding a new variant breaks the `never` assignment immediately at compile time.",
+            "hint": "Think about what happens when a teammate adds a 4th case to the union later."
+          }
+        },
+        {
+          "id": "ts-101-fill-blank",
+          "title": "Participation Activity: Fill in the Type Guard",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Complete the custom TypeScript type predicate signature.",
+            "template": "function isString(val: unknown): val ___ ___ {\n  return typeof val === 'string';\n}",
+            "blanks": [
+              {"accepted": ["is"], "hint": "Type predicate keyword"},
+              {"accepted": ["string"], "hint": "Primitive type name"}
+            ],
+            "explanation": "`val is string` tells the compiler that returning `true` narrows `val` to `string`."
+          }
+        },
+        {
+          "id": "ts-101-nvim-lab",
+          "title": "Neovim Lab: Typed Training Job Reducer",
+          "activity_type": "nvim_lab",
+          "grader_type": "typescript",
+          "order_index": 2,
+          "xp_reward": 60,
+          "par_keystrokes": 95,
+          "spec": {
+            "primary_file": "solution.ts",
+            "require_type_annotations": true,
+            "required_patterns": ["type\\s+JobEvent", "switch"],
+            "instructions": "Define a discriminated union `JobEvent` (`start`, `progress`, `fail`) and implement `formatEvent(ev: JobEvent): string` in `solution.ts`:\n- `{ kind: 'start', model: string }` -> `'Started <model>'`\n- `{ kind: 'progress', epoch: number, loss: number }` -> `'Epoch <epoch>: loss=<loss fixed to 2 decimals>'`\n- `{ kind: 'fail', reason: string }` -> `'Failed: <reason>'`",
+            "starter_files": {
+              "solution.ts": "export type JobEvent =\n  | { kind: 'start'; model: string }\n  | { kind: 'progress'; epoch: number; loss: number }\n  | { kind: 'fail'; reason: string };\n\nexport function formatEvent(ev: JobEvent): string {\n  // TODO: narrow on ev.kind using switch\n  switch (ev.kind) {\n    default:\n      return '';\n  }\n}\n"
+            },
+            "test_code": "import assert from 'node:assert/strict';\nimport { formatEvent } from './solution.ts';\n\nassert.equal(formatEvent({ kind: 'start', model: 'qwen-27b' }), 'Started qwen-27b');\nassert.equal(formatEvent({ kind: 'progress', epoch: 3, loss: 0.426 }), 'Epoch 3: loss=0.43');\nassert.equal(formatEvent({ kind: 'fail', reason: 'OOM' }), 'Failed: OOM');\nconsole.log('All TypeScript tests passed!');\n",
+            "hints": [
+              "Use `ev.loss.toFixed(2)` for the progress case.",
+              "Add `case 'start':`, `case 'progress':`, and `case 'fail':` inside the switch."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "javascript-async-101",
+      "tech_slug": "javascript",
+      "title": "Closures, Microtasks & Async/Await",
+      "subtitle": "Understand JS lexical scope and the event loop once and for all.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Trace synchronous vs microtask vs macrotask execution order and implement a clean async retry helper in Neovim.",
+      "tags": ["javascript", "async", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Event Loop Ordering",
+          "body": "JavaScript executes synchronous code on the call stack first, then drains the entire **Microtask Queue** (`Promise.then`, `await` continuations) BEFORE running the next **Macrotask** (`setTimeout`, I/O callbacks).",
+          "code_example": "console.log('1');\nsetTimeout(() => console.log('2'), 0);\nPromise.resolve().then(() => console.log('3'));\nconsole.log('4');\n// Output: 1, 4, 3, 2"
+        }
+      ],
+      "activities": [
+        {
+          "id": "js-101-trace",
+          "title": "Participation Activity: Event Loop Execution Order",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Predict the exact order of logged tokens (`A`, `B`, `C`, `D`).",
+            "code": [
+              "console.log('A');",
+              "setTimeout(() => console.log('B'), 0);",
+              "Promise.resolve().then(() => console.log('C'));",
+              "console.log('D');"
+            ],
+            "steps": [
+              {"line": 1, "note": "Synchronous call stack prints 'A'."},
+              {"line": 2, "note": "'B' is scheduled in the Macrotask (timer) queue."},
+              {"line": 3, "note": "'C' is scheduled in the Microtask queue."},
+              {"line": 4, "note": "Synchronous 'D' runs, then Microtask 'C', finally Macrotask 'B'."}
+            ],
+            "checkpoints": [
+              {"id": "first", "line": 1, "label": "1st printed", "expected": "A"},
+              {"id": "second", "line": 4, "label": "2nd printed", "expected": "D"},
+              {"id": "third", "line": 3, "label": "3rd printed", "expected": "C"},
+              {"id": "fourth", "line": 2, "label": "4th printed", "expected": "B"}
+            ],
+            "explanation": "Synchronous -> Microtasks (Promises) -> Macrotasks (setTimeout)."
+          }
+        },
+        {
+          "id": "js-101-nvim-lab",
+          "title": "Neovim Lab: Async Retry with Closure Counter",
+          "activity_type": "nvim_lab",
+          "grader_type": "javascript",
+          "order_index": 1,
+          "xp_reward": 60,
+          "par_keystrokes": 90,
+          "spec": {
+            "primary_file": "solution.mjs",
+            "instructions": "Export two functions in `solution.mjs`:\n1. `makeCounter(start = 0)`: returns a function that increments and returns the count each call.\n2. `async retry(fn, maxAttempts)`: awaits `fn()` up to `maxAttempts` times, returning the first resolved value or rethrowing the last error.",
+            "starter_files": {
+              "solution.mjs": "export function makeCounter(start = 0) {\n  // TODO: return closure incrementing from start\n}\n\nexport async function retry(fn, maxAttempts) {\n  // TODO: call await fn() up to maxAttempts times\n}\n"
+            },
+            "test_code": "import assert from 'node:assert/strict';\nimport { makeCounter, retry } from './solution.mjs';\n\nconst next = makeCounter(10);\nassert.equal(next(), 11);\nassert.equal(next(), 12);\n\nlet tries = 0;\nconst val = await retry(async () => {\n  tries += 1;\n  if (tries < 3) throw new Error('flaky');\n  return 'ok';\n}, 3);\nassert.equal(val, 'ok');\nassert.equal(tries, 3);\n\nawait assert.rejects(() => retry(async () => { throw new Error('boom'); }, 2), /boom/);\nconsole.log('JS tests passed!');\n",
+            "hints": [
+              "Keep `let count = start;` inside `makeCounter` and return `() => ++count`.",
+              "Loop `for (let i = 0; i < maxAttempts; i++)` with `try { return await fn(); } catch (err) { lastErr = err; }`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cpp-modern-raii-101",
+      "tech_slug": "cpp",
+      "title": "Modern C++20: References, Vectors & Const-Correctness",
+      "subtitle": "Write zero-leak C++ using STL containers and pass-by-const-reference.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 7,
+      "order_index": 1,
+      "summary": "Avoid unnecessary copies with `const T&`, iterate safely with range-based `for`, and compile C++20 code directly from Neovim.",
+      "tags": ["cpp", "stl", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Pass by `const T&` vs Pass by Value",
+          "body": "Passing a `std::vector<int>` by value copies every element on the heap. Passing `const std::vector<int>&` avoids copying while guaranteeing the function cannot mutate the caller's vector.",
+          "code_example": "#include <vector>\nint sum_vec(const std::vector<int>& xs) {\n    int total = 0;\n    for (int x : xs) total += x;\n    return total;\n}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "cpp-101-read-check",
+          "title": "Participation Activity: Avoiding Hidden Copies",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Which parameter signature reads a large `std::vector<double>` without copying it and prevents accidental modification?",
+            "options": [
+              "std::vector<double> data",
+              "const std::vector<double>& data",
+              "std::vector<double>& data",
+              "std::vector<double>* const data"
+            ],
+            "correct_index": 1,
+            "explanation": "`const std::vector<double>&` binds directly to the caller's vector with zero copy overhead and enforces read-only safety.",
+            "hint": "Combine `const` with a reference `&`."
+          }
+        },
+        {
+          "id": "cpp-101-nvim-lab",
+          "title": "Neovim Lab: C++20 Vector Stats & Clamp",
+          "activity_type": "nvim_lab",
+          "grader_type": "cpp",
+          "order_index": 1,
+          "xp_reward": 65,
+          "par_keystrokes": 100,
+          "spec": {
+            "primary_file": "solution.hpp",
+            "instructions": "Implement two inline C++20 functions in `solution.hpp`:\n1. `int dot_product(const std::vector<int>& a, const std::vector<int>& b)`\n2. `void clamp_in_place(std::vector<int>& xs, int lo, int hi)` clamping every element into `[lo, hi]`.",
+            "starter_files": {
+              "solution.hpp": "#pragma once\n#include <algorithm>\n#include <vector>\n\ninline int dot_product(const std::vector<int>& a, const std::vector<int>& b) {\n    // TODO: sum a[i] * b[i]\n    return 0;\n}\n\ninline void clamp_in_place(std::vector<int>& xs, int lo, int hi) {\n    // TODO: clamp each element of xs into [lo, hi]\n}\n"
+            },
+            "test_code": "#include <cassert>\n#include <iostream>\n#include <vector>\n#include \"solution.hpp\"\n\nint main() {\n    assert(dot_product({1, 2, 3}, {4, 5, 6}) == 32);\n    assert(dot_product({}, {}) == 0);\n    std::vector<int> v = {-5, 0, 7, 15};\n    clamp_in_place(v, 0, 10);\n    std::vector<int> expected = {0, 0, 7, 10};\n    assert(v == expected);\n    std::cout << \"All C++20 tests passed!\\n\";\n    return 0;\n}\n",
+            "hints": [
+              "Loop `for (size_t i = 0; i < a.size(); ++i)` for `dot_product`.",
+              "Use `for (int& x : xs) x = std::clamp(x, lo, hi);` from `<algorithm>`."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

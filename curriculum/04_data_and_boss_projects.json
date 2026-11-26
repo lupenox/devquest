@@ -1,0 +1,403 @@
+{
+  "modules": [
+    {
+      "id": "sql-joins-aggregates-101",
+      "tech_slug": "sql",
+      "title": "SQL JOINs, GROUP BY & HAVING",
+      "subtitle": "Aggregate relational data cleanly in a real live SQLite engine.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Master SQL execution order (`FROM -> WHERE -> GROUP BY -> HAVING -> SELECT -> ORDER BY`) and run real `.sql` queries from Neovim.",
+      "tags": ["sql", "sqlite", "zybooks"],
+      "external_resources": [
+        {"label": "SQLBolt Interactive Lessons", "url": "https://sqlbolt.com/"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 WHERE vs HAVING",
+          "body": "`WHERE` filters raw rows *before* grouping. `HAVING` filters aggregated groups *after* `GROUP BY` (for example, `HAVING AVG(score) >= 0.85`).",
+          "code_example": "SELECT m.name, ROUND(AVG(r.score), 2) AS avg_score\nFROM models m\nJOIN eval_runs r ON r.model_id = m.id\nGROUP BY m.name\nHAVING AVG(r.score) >= 0.85\nORDER BY avg_score DESC;"
+        }
+      ],
+      "activities": [
+        {
+          "id": "sql-101-read-check",
+          "title": "Participation Activity: Logical Execution Order",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Which clause filters out groups AFTER `COUNT(*)` or `AVG(score)` has been computed?",
+            "options": ["WHERE", "HAVING", "ORDER BY", "DISTINCT"],
+            "correct_index": 1,
+            "explanation": "`HAVING` runs after `GROUP BY` so it can evaluate aggregate functions.",
+            "hint": "`WHERE` cannot use aggregate functions like `COUNT(*) > 2`."
+          }
+        },
+        {
+          "id": "sql-101-nvim-lab",
+          "title": "Neovim Lab: Top AI Models by Average Eval Score",
+          "activity_type": "nvim_lab",
+          "grader_type": "sql",
+          "order_index": 1,
+          "xp_reward": 65,
+          "par_keystrokes": 90,
+          "spec": {
+            "primary_file": "query.sql",
+            "instructions": "Tables:\n- `models(id, name)`\n- `runs(id, model_id, score)`\n\nWrite a SQL query in `query.sql` returning `(name, avg_score)` where `avg_score = ROUND(AVG(score), 2)` for models with `AVG(score) >= 0.80`, ordered by `avg_score DESC`.",
+            "starter_files": {
+              "query.sql": "-- Return columns: name, avg_score (rounded to 2 decimals)\n-- Filter to models with avg_score >= 0.80, ordered descending\nSELECT name, 0.0 AS avg_score FROM models;\n"
+            },
+            "setup_sql": "CREATE TABLE models (id INTEGER PRIMARY KEY, name TEXT);\nCREATE TABLE runs (id INTEGER PRIMARY KEY, model_id INTEGER, score REAL);\nINSERT INTO models VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');\nINSERT INTO runs VALUES (1,1,0.90),(2,1,0.80),(3,2,0.60),(4,2,0.70),(5,3,0.95),(6,3,0.91);",
+            "expected_columns": ["name", "avg_score"],
+            "expected_rows": [["gamma", 0.93], ["alpha", 0.85]],
+            "order_matters": true,
+            "hints": [
+              "JOIN `runs r ON r.model_id = m.id`, then `GROUP BY m.name HAVING AVG(r.score) >= 0.80`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-schema-101",
+      "tech_slug": "json",
+      "title": "JSON Structure, Data Types & JSON Schema",
+      "subtitle": "Author strict, valid API payloads and structured LLM output schemas.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 5,
+      "order_index": 1,
+      "summary": "Avoid JSON pitfalls (trailing commas, single quotes) and craft payloads matching strict JSON Schema contracts.",
+      "tags": ["json", "schema", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Strict JSON Rules",
+          "body": "Unlike JavaScript objects, valid JSON strictly requires double-quoted keys and strings, forbids trailing commas, and forbids comments. JSON Schema lets APIs and AI structured-output pipelines validate every key and type automatically.",
+          "code_example": "{\n  \"model\": \"qwen3.8\",\n  \"temperature\": 0.2,\n  \"tools\": [\"search\", \"grade\"]\n}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "json-101-read-check",
+          "title": "Participation Activity: Spot Invalid JSON",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "Which snippet is 100% valid RFC 8259 JSON?",
+            "options": [
+              "{'ok': true}",
+              "{\"ok\": true,}",
+              "{\"ok\": true, \"count\": 3}",
+              "{ok: true, count: 3}"
+            ],
+            "correct_index": 2,
+            "explanation": "RFC 8259 requires double-quoted keys and forbids trailing commas.",
+            "hint": "Check quotes and trailing commas."
+          }
+        },
+        {
+          "id": "json-101-nvim-lab",
+          "title": "Neovim Lab: Repair & Complete a Training Spec JSON",
+          "activity_type": "nvim_lab",
+          "grader_type": "json",
+          "order_index": 1,
+          "xp_reward": 50,
+          "par_keystrokes": 60,
+          "spec": {
+            "primary_file": "training_spec.json",
+            "instructions": "Fix the syntax errors in `training_spec.json` and ensure it matches:\n- `name` (string, non-empty)\n- `epochs` (integer >= 1)\n- `learning_rate` (number > 0 and < 1)\n- `tags` (array of at least 2 strings, containing `'neovim'`)",
+            "starter_files": {
+              "training_spec.json": "{\n  'name': 'sft-run-1',\n  \"epochs\": 3,\n  \"learning_rate\": 0.0002,\n  \"tags\": [\"lora\",],\n}\n"
+            },
+            "schema": {
+              "type": "object",
+              "required": ["name", "epochs", "learning_rate", "tags"],
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "epochs": {"type": "integer", "minimum": 1},
+                "learning_rate": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+                "tags": {"type": "array", "minItems": 2, "items": {"type": "string"}, "contains": {"const": "neovim"}}
+              }
+            },
+            "hints": [
+              "Replace single quotes on `'name'` with double quotes, remove trailing commas, and add `\"neovim\"` to `tags`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "xml-xpath-101",
+      "tech_slug": "xml",
+      "title": "Well-Formed XML, Attributes & XPath",
+      "subtitle": "Navigate hierarchical XML configs, SVGs, and structured prompts cleanly.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 5,
+      "order_index": 1,
+      "summary": "Build well-formed XML trees with attributes and verify them using real `lxml` XPath queries.",
+      "tags": ["xml", "xpath", "zybooks"],
+      "sections": [
+        {
+          "title": "1.1 Elements, Attributes & XPath",
+          "body": "Every XML document must have exactly one root element, properly nested closing tags, and quoted attribute values. XPath (`//dataset[@split='eval']/name`) queries any depth declaratively.",
+          "code_example": "<pipeline version=\"1.0\">\n  <dataset split=\"train\"><name>code-instruct</name></dataset>\n  <dataset split=\"eval\"><name>humaneval</name></dataset>\n</pipeline>"
+        }
+      ],
+      "activities": [
+        {
+          "id": "xml-101-read-check",
+          "title": "Participation Activity: XPath Predicate",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "question": "In XPath, what does `//task[@priority='high']` select?",
+            "options": [
+              "Only the root `<task>` element",
+              "Every `<task>` element anywhere in the document whose `priority` attribute equals `'high'`",
+              "Every attribute named `task`",
+              "Only text nodes containing `high`"
+            ],
+            "correct_index": 1,
+            "explanation": "`//` searches recursively at any depth, and `[@attr='val']` filters by attribute value.",
+            "hint": "`@` always refers to an XML attribute."
+          }
+        },
+        {
+          "id": "xml-101-nvim-lab",
+          "title": "Neovim Lab: Author an Eval Pipeline XML Manifest",
+          "activity_type": "nvim_lab",
+          "grader_type": "xml",
+          "order_index": 1,
+          "xp_reward": 50,
+          "par_keystrokes": 75,
+          "spec": {
+            "primary_file": "pipeline.xml",
+            "instructions": "Edit `pipeline.xml` with root `<pipeline version=\"2.0\">` containing:\n1. Two `<stage>` elements.\n2. One `<stage name=\"tokenize\" enabled=\"true\"/>`.\n3. One `<stage name=\"evaluate\" enabled=\"true\"><metric>f1</metric></stage>`.",
+            "starter_files": {
+              "pipeline.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<pipeline version=\"1.0\">\n  <!-- TODO: update version to 2.0 and add tokenize + evaluate stages -->\n</pipeline>\n"
+            },
+            "xpath_checks": [
+              {"xpath": "/pipeline/@version", "equals": "2.0"},
+              {"xpath": "//stage", "count": 2},
+              {"xpath": "//stage[@name='tokenize' and @enabled='true']", "count": 1},
+              {"xpath": "//stage[@name='evaluate' and @enabled='true']/metric", "equals": "f1"}
+            ],
+            "hints": [
+              "Change `version=\"1.0\"` to `version=\"2.0\"` and add both `<stage>` elements inside `<pipeline>`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "regex-mastery-101",
+      "tech_slug": "regex",
+      "title": "Regex: Anchors, Quantifiers & Named Capture Groups",
+      "subtitle": "Parse logs, refactor in Neovim, and extract structured fields in one line.",
+      "difficulty": "beginner",
+      "kind": "zybooks",
+      "estimated_minutes": 6,
+      "order_index": 1,
+      "summary": "Build muscle memory for character classes (`\\d`, `\\w`), quantifiers (`+`, `{m,n}`), and Python/JS named groups `(?P<name>...)`.",
+      "tags": ["regex", "parsing", "zybooks"],
+      "external_resources": [
+        {"label": "RegexOne Interactive Tutorial", "url": "https://regexone.com/"},
+        {"label": "RegexCrossword Puzzles", "url": "https://regexcrossword.com/"}
+      ],
+      "sections": [
+        {
+          "title": "1.1 Named Capture Groups",
+          "body": "Instead of brittle positional group indices (`match.group(2)`), use named capture groups `(?P<epoch>\\d+)` in Python (or `(?<epoch>\\d+)` in JS) to extract self-documenting dicts directly from messy logs.",
+          "code_example": "Pattern: ^epoch=(?P<epoch>\\d+)\\s+loss=(?P<loss>\\d+\\.\\d+)$\nInput:   epoch=12 loss=0.341\nResult:  {'epoch': '12', 'loss': '0.341'}"
+        }
+      ],
+      "activities": [
+        {
+          "id": "regex-101-fill-blank",
+          "title": "Participation Activity: Quantifier Shorthands",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 20,
+          "spec": {
+            "prompt": "Match a 4-digit year followed by a hyphen and 2-digit month (`2026-11`).",
+            "template": "^\\d{___}-\\d{___}$",
+            "blanks": [
+              {"accepted": ["4"], "hint": "4 digits for year"},
+              {"accepted": ["2"], "hint": "2 digits for month"}
+            ],
+            "explanation": "`{n}` matches an exact repetition count."
+          }
+        },
+        {
+          "id": "regex-101-nvim-lab",
+          "title": "Neovim Lab: Extract Epoch & Loss from Training Logs",
+          "activity_type": "nvim_lab",
+          "grader_type": "regex",
+          "order_index": 1,
+          "xp_reward": 60,
+          "par_keystrokes": 55,
+          "spec": {
+            "primary_file": "pattern.regex",
+            "mode": "fullmatch",
+            "instructions": "Write a single-line regex in `pattern.regex` matching lines like `epoch=12 loss=0.341` with named groups `(?P<epoch>...)` and `(?P<loss>...)` (loss must contain a decimal point).",
+            "starter_files": {
+              "pattern.regex": "# Write your regex on the line below (comments starting with # are ignored)\nepoch=\\d+\n"
+            },
+            "must_match": ["epoch=1 loss=0.95", "epoch=42 loss=12.004"],
+            "must_not_match": ["epoch= loss=0.5", "epoch=3 loss=abc", "step=3 loss=0.5"],
+            "capture_cases": [
+              {"input": "epoch=7 loss=0.125", "expected": {"epoch": "7", "loss": "0.125"}}
+            ],
+            "hints": [
+              "Try `epoch=(?P<epoch>\\d+)\\s+loss=(?P<loss>\\d+\\.\\d+)`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "boss-fastapi-shortener",
+      "tech_slug": "fastapi",
+      "title": "Boss Project: URL Shortener & Click Analytics API",
+      "subtitle": "Multi-milestone FastAPI + SQLite project graded with real TestClient integration tests.",
+      "difficulty": "intermediate",
+      "kind": "project",
+      "estimated_minutes": 18,
+      "order_index": 20,
+      "prereq_module_id": "fastapi-foundations-101",
+      "summary": "Build a real persistent URL shortener backed by SQLite, complete with click-counting redirects and analytics stats.",
+      "tags": ["boss-project", "fastapi", "sql", "python"],
+      "sections": [
+        {
+          "title": "Project Spec",
+          "body": "Complete each milestone in Neovim. Milestone 1 builds link creation & lookup; Milestone 2 adds click tracking and `/stats/{code}` analytics."
+        }
+      ],
+      "activities": [
+        {
+          "id": "boss-shortener-m1",
+          "title": "Milestone 1: Shorten & Resolve Links (FastAPI)",
+          "activity_type": "boss_checkpoint",
+          "grader_type": "fastapi",
+          "order_index": 0,
+          "xp_reward": 100,
+          "par_keystrokes": 160,
+          "spec": {
+            "primary_file": "shortener.py",
+            "instructions": "Build `shortener.py` with:\n- `POST /shorten` accepting `{\"url\": \"https://...\", \"code\": \"optional\"}` -> returns `201` with `{\"code\": ..., \"url\": ..., \"clicks\": 0}`.\n- `GET /links/{code}` -> increments `clicks` by 1 and returns `{\"code\": ..., \"url\": ..., \"clicks\": <new count>}` (or `404`).\n- `GET /stats/{code}` -> returns current link stats WITHOUT incrementing `clicks` (or `404`).",
+            "starter_files": {
+              "shortener.py": "import secrets\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI()\nSTORE: dict[str, dict] = {}\n\n\nclass ShortenIn(BaseModel):\n    url: str\n    code: str | None = None\n\n\n# TODO: implement POST /shorten (201), GET /links/{code}, and GET /stats/{code}\n"
+            },
+            "test_code": "from fastapi.testclient import TestClient\nimport shortener\n\ndef test_shortener_project():\n    shortener.STORE.clear()\n    c = TestClient(shortener.app)\n    r = c.post('/shorten', json={'url': 'https://neovim.io', 'code': 'nvim'})\n    assert r.status_code == 201\n    assert r.json() == {'code': 'nvim', 'url': 'https://neovim.io', 'clicks': 0}\n\n    r2 = c.get('/links/nvim')\n    assert r2.status_code == 200 and r2.json()['clicks'] == 1\n    r3 = c.get('/links/nvim')\n    assert r3.status_code == 200 and r3.json()['clicks'] == 2\n\n    st = c.get('/stats/nvim')\n    assert st.status_code == 200 and st.json()['clicks'] == 2\n\n    auto = c.post('/shorten', json={'url': 'https://fastapi.tiangolo.com'})\n    assert auto.status_code == 201 and len(auto.json()['code']) >= 4\n    assert c.get('/stats/nope').status_code == 404\n",
+            "hints": [
+              "Generate an automatic code via `secrets.token_urlsafe(4)` when `payload.code` is None.",
+              "Only increment `STORE[code]['clicks'] += 1` inside `GET /links/{code}`, NOT in `/stats/{code}`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "boss-bash-ai-log-monitor",
+      "tech_slug": "bash",
+      "title": "Boss Project: AI Training Log Summary CLI",
+      "subtitle": "Parse epoch losses from real AI training logs and output clean min-loss stats in Bash.",
+      "difficulty": "intermediate",
+      "kind": "project",
+      "estimated_minutes": 15,
+      "order_index": 21,
+      "prereq_module_id": "bash-scripting-101",
+      "summary": "A practical CLI tool tailored to AI training workflows: extract best (lowest) loss epoch and count warnings in one Bash pipeline.",
+      "tags": ["boss-project", "bash", "regex", "ai-ops"],
+      "sections": [
+        {
+          "title": "Project Spec",
+          "body": "Given a training log containing lines like `epoch=1 loss=0.842`, print `best_epoch=<N> best_loss=<L>` for the lowest numeric loss."
+        }
+      ],
+      "activities": [
+        {
+          "id": "boss-logmon-m1",
+          "title": "Milestone 1: Extract Best Epoch & Lowest Loss",
+          "activity_type": "boss_checkpoint",
+          "grader_type": "bash",
+          "order_index": 0,
+          "xp_reward": 100,
+          "par_keystrokes": 110,
+          "spec": {
+            "primary_file": "best_epoch.sh",
+            "instructions": "Write `best_epoch.sh <logfile>` that parses lines formatted like `epoch=<int> loss=<float>` (ignoring other lines) and prints:\n`best_epoch=<N> best_loss=<L>` for the minimum loss.",
+            "starter_files": {
+              "best_epoch.sh": "#!/usr/bin/env bash\nset -euo pipefail\n# TODO: parse epoch=<N> loss=<L> lines from \"$1\" and print best_epoch=<N> best_loss=<L>\n"
+            },
+            "checks": [
+              {
+                "name": "finds lowest loss epoch",
+                "args": ["run.log"],
+                "fixture_files": {
+                  "run.log": "INFO starting\nepoch=1 loss=0.912\nepoch=2 loss=0.415\nWARN slow step\nepoch=3 loss=0.490\n"
+                },
+                "exit_code": 0,
+                "stdout_equals": "best_epoch=2 best_loss=0.415"
+              }
+            ],
+            "hints": [
+              "`awk` makes this a 5-line gem: match `/^epoch=/`, split `=` fields, track `min_loss` numerically (`loss + 0 < min_loss`)."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "boss-cpp-lru-cache",
+      "tech_slug": "cpp",
+      "title": "Boss Project: C++20 Fixed-Capacity Key-Value Ring/LRU",
+      "subtitle": "Build a fast C++20 LRU cache supporting O(1) lookup and eviction.",
+      "difficulty": "advanced",
+      "kind": "project",
+      "estimated_minutes": 20,
+      "order_index": 22,
+      "prereq_module_id": "cpp-modern-raii-101",
+      "summary": "Combine `std::list` and `std::unordered_map` to implement a production-style LRU cache in C++20.",
+      "tags": ["boss-project", "cpp", "leetcode"],
+      "sections": [
+        {
+          "title": "Project Spec",
+          "body": "Implement `LRUCache` with `get(int key)` (returning `-1` if absent) and `put(int key, int val)` evicting the least-recently-used key when capacity is exceeded."
+        }
+      ],
+      "activities": [
+        {
+          "id": "boss-cpp-lru-m1",
+          "title": "Milestone 1: Implement O(1) LRUCache in C++20",
+          "activity_type": "boss_checkpoint",
+          "grader_type": "cpp",
+          "order_index": 0,
+          "xp_reward": 120,
+          "par_keystrokes": 180,
+          "spec": {
+            "primary_file": "lru.hpp",
+            "instructions": "Implement `class LRUCache` in `lru.hpp` with constructor `LRUCache(size_t cap)`, `int get(int key)`, and `void put(int key, int value)`.",
+            "starter_files": {
+              "lru.hpp": "#pragma once\n#include <list>\n#include <unordered_map>\n#include <utility>\n\nclass LRUCache {\npublic:\n    explicit LRUCache(size_t capacity) : cap_(capacity) {}\n\n    int get(int key) {\n        // TODO\n        return -1;\n    }\n\n    void put(int key, int value) {\n        // TODO\n    }\n\nprivate:\n    size_t cap_;\n    std::list<std::pair<int, int>> order_;\n    std::unordered_map<int, std::list<std::pair<int, int>>::iterator> map_;\n};\n"
+            },
+            "test_code": "#include <cassert>\n#include <iostream>\n#include \"lru.hpp\"\n\nint main() {\n    LRUCache cache(2);\n    cache.put(1, 10);\n    cache.put(2, 20);\n    assert(cache.get(1) == 10);\n    cache.put(3, 30); // evicts 2\n    assert(cache.get(2) == -1);\n    cache.put(4, 40); // evicts 1\n    assert(cache.get(1) == -1);\n    assert(cache.get(3) == 30);\n    assert(cache.get(4) == 40);\n    std::cout << \"C++20 LRU Cache passed!\\n\";\n    return 0;\n}\n",
+            "hints": [
+              "Use `order_.splice(order_.begin(), order_, it->second)` to promote an entry to most-recently-used in O(1)!"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

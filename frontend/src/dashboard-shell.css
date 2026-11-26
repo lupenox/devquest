@@ -132,3 +132,16 @@
 
   .dashboard-shell .nav-btn svg { display: none; }
 }
+
+@media (max-width: 360px) {
+  .dashboard-shell .hud-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand connection" "tools tools";
+    row-gap: .5rem;
+  }
+
+  .dashboard-shell .hud-stats {
+    margin-inline-start: 0;
+    justify-content: flex-start;
+  }
+}

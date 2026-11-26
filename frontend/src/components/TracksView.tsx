@@ -1,353 +1,127 @@
-import React, { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  Code2,
-  Layers,
-  Play,
-  Sparkles,
-  Swords,
-  Zap,
-} from "lucide-react";
+import { useEffect, useState, type MouseEvent } from "react";
+import { ArrowLeft, ChevronRight, Search } from "lucide-react";
 import { api } from "../api";
-import type { ModuleSummary, Technology } from "../types";
+import { routeToPath } from "../router";
+import type { Technology } from "../types";
+import { TrackSyllabus } from "./TrackSyllabus";
+import "../tracks.css";
 
 interface Props {
-  initialTech: string | null;
+  techSlug: string | null;
+  onSelectTech: (slug: string) => void;
+  onAllTracks: () => void;
   onOpenModule: (moduleId: string) => void;
 }
 
-interface NumberedChapter {
-  chapterNum: number;
-  mod: ModuleSummary;
-  isCompleted: boolean;
+function followLink(event: MouseEvent<HTMLAnchorElement>, navigate: () => void) {
+  if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  navigate();
+  window.scrollTo(0, 0);
 }
 
-interface SyllabusPart {
-  key: "foundations" | "intermediate" | "advanced" | "boss";
-  title: string;
-  subtitle: string;
-  items: NumberedChapter[];
-}
-
-function sortAndNumberModules(modules: ModuleSummary[]): NumberedChapter[] {
-  const sorted = [...modules].sort((a, b) => {
-    const diff = (a.order_index ?? 0) - (b.order_index ?? 0);
-    if (diff !== 0) return diff;
-    return a.id.localeCompare(b.id);
-  });
-  return sorted.map((mod, idx) => ({
-    chapterNum: idx + 1,
-    mod,
-    isCompleted: mod.activity_count > 0 && mod.completed_count >= mod.activity_count,
-  }));
-}
-
-function groupIntoSyllabusParts(chapters: NumberedChapter[]): SyllabusPart[] {
-  const foundations: NumberedChapter[] = [];
-  const intermediate: NumberedChapter[] = [];
-  const advanced: NumberedChapter[] = [];
-  const boss: NumberedChapter[] = [];
-
-  for (const ch of chapters) {
-    const kind = (ch.mod.kind || "").toLowerCase();
-    const diff = (ch.mod.difficulty || "").toLowerCase();
-    if (kind === "project") {
-      boss.push(ch);
-    } else if (diff === "advanced") {
-      advanced.push(ch);
-    } else if (diff === "beginner") {
-      foundations.push(ch);
-    } else {
-      intermediate.push(ch);
-    }
-  }
-
-  const parts: SyllabusPart[] = [
-    {
-      key: "foundations",
-      title: "Part 1: Foundations (Beginner)",
-      subtitle: "Core syntax, control flow, data structures & interactive zyBooks fundamentals",
-      items: foundations,
-    },
-    {
-      key: "intermediate",
-      title: "Part 2: Intermediate & Katas",
-      subtitle: "Real-world engineering idioms, typing, testing, patterns & problem-solving katas",
-      items: intermediate,
-    },
-    {
-      key: "advanced",
-      title: "Part 3: Advanced & Async",
-      subtitle: "Concurrency, async architectures, performance & algorithmic depth",
-      items: advanced,
-    },
-    {
-      key: "boss",
-      title: "Part 4: Boss Projects",
-      subtitle: "Capstone multi-test engineering builds verified directly in Neovim",
-      items: boss,
-    },
-  ];
-
-  return parts.filter((p) => p.items.length > 0);
-}
-
-function PartIcon({ partKey }: { partKey: SyllabusPart["key"] }) {
-  switch (partKey) {
-    case "foundations":
-      return <BookOpen size={16} color="var(--accent)" />;
-    case "intermediate":
-      return <Layers size={16} color="var(--cyan)" />;
-    case "advanced":
-      return <Zap size={16} color="var(--amber)" />;
-    case "boss":
-      return <Swords size={16} color="var(--red)" />;
-  }
-}
-
-export function TracksView({ initialTech, onOpenModule }: Props) {
-  const [techs, setTechs] = useState<Technology[]>([]);
-  const [activeTech, setActiveTech] = useState<string>(initialTech || "all");
-  const [loading, setLoading] = useState(true);
+export function TracksView({ techSlug, onSelectTech, onAllTracks, onOpenModule }: Props) {
+  const [technologies, setTechnologies] = useState<Technology[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    setActiveTech(initialTech || "all");
-  }, [initialTech]);
+    let current = true;
+    api.tracks().then(({ technologies }) => {
+      if (current) setTechnologies(technologies);
+    }).catch(() => {
+      if (current) setFailed(true);
+    });
+    return () => { current = false; };
+  }, [attempt]);
 
-  useEffect(() => {
-    api
-      .tracks()
-      .then((res) => setTechs(res.technologies))
-      .finally(() => setLoading(false));
-  }, []);
+  if (failed) return (
+    <div className="card">
+      <p role="alert">The tracks could not be loaded.</p>
+      <button type="button" className="btn" onClick={() => { setFailed(false); setAttempt(attempt + 1); }}>Try again</button>
+    </div>
+  );
+  if (!technologies) return <div className="card" role="status">Loading tracks…</div>;
 
-  if (loading) return <div className="card">Loading tracks...</div>;
-
-  const visible = activeTech === "all" ? techs : techs.filter((t) => t.slug === activeTech);
-  const isSingleTechSelected = activeTech !== "all" && visible.length === 1;
-
-  const renderChapterCard = (
-    ch: NumberedChapter,
-    techColor: string,
-    isNextUp: boolean,
-    showChapterNumber: boolean
-  ) => {
-    const { mod, chapterNum, isCompleted } = ch;
-    const modPct = mod.activity_count > 0 ? Math.round((mod.completed_count / mod.activity_count) * 100) : 0;
-
+  if (techSlug && techSlug !== "all") {
+    const selected = technologies.find((t) => t.slug === techSlug);
     return (
-      <div
-        key={mod.id}
-        className={`track-module-card ${isCompleted ? "completed" : ""} ${isNextUp ? "next-up" : ""}`}
-        data-testid={`track-module-${mod.id}`}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {showChapterNumber && (
-                <span className="chapter-pill" data-testid={`chapter-num-${mod.id}`}>
-                  Ch. {chapterNum}
-                </span>
-              )}
-              <span className="badge badge-kind">{mod.kind}</span>
-              <span className="badge badge-unstarted">{mod.difficulty}</span>
-              {mod.source === "generated" && <span className="badge badge-xp">Ollama AI</span>}
-              {isNextUp && !isCompleted && (
-                <span className="badge badge-warming">
-                  <Sparkles size={10} /> Next Up
-                </span>
-              )}
-            </div>
-            {isCompleted && (
-              <span className="badge badge-done" title="Chapter mastered">
-                <CheckCircle2 size={12} /> Done
-              </span>
-            )}
-          </div>
-
-          <strong style={{ display: "block", marginBottom: 4, fontSize: "0.95rem" }}>{mod.title}</strong>
-          <p className="muted" style={{ margin: 0, fontSize: "0.83rem", lineHeight: 1.45 }}>
-            {mod.subtitle}
-          </p>
+      <div className="track-view">
+        <div className="track-toolbar">
+          <a href="/tracks" onClick={(event) => followLink(event, () => { setQuery(""); onAllTracks(); })}>
+            <ArrowLeft size={16} aria-hidden="true" /> All tracks
+          </a>
+          {selected && (
+            <label className="track-switch">Switch track
+              <select value={techSlug} onChange={(event) => onSelectTech(event.target.value)}>
+                {technologies.map((tech) => <option key={tech.slug} value={tech.slug}>{tech.name}</option>)}
+              </select>
+            </label>
+          )}
         </div>
-
-        <div>
-          <div className="chapter-mini-bar">
-            <div
-              className="chapter-mini-fill"
-              style={{
-                width: `${modPct}%`,
-                background: isCompleted ? "var(--green-solid)" : techColor,
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <span className="muted" style={{ fontSize: "0.79rem" }}>
-              {mod.completed_count}/{mod.activity_count} drills • ~{mod.estimated_minutes} min
-            </span>
-            <button
-              type="button"
-              className={`btn btn-sm ${isCompleted ? "" : "btn-primary"}`}
-              onClick={() => onOpenModule(mod.id)}
-            >
-              {mod.kind === "zybooks" ? <BookOpen size={13} /> : <Code2 size={13} />}
-              <Play size={12} /> Open
-            </button>
-          </div>
-        </div>
+        {selected
+          ? <TrackSyllabus key={selected.slug} tech={selected} onOpenModule={onOpenModule} />
+          : <p className="card">This track could not be found.</p>}
       </div>
     );
-  };
+  }
+
+  const search = query.trim().toLowerCase();
+  const groups = new Map<string, Technology[]>();
+  let matches = 0;
+  let chapters = 0;
+  for (const tech of technologies) {
+    chapters += tech.modules?.length ?? 0;
+    if (!`${tech.name} ${tech.slug} ${tech.category}`.toLowerCase().includes(search)) continue;
+    matches++;
+    const group = groups.get(tech.category);
+    if (group) group.push(tech);
+    else groups.set(tech.category, [tech]);
+  }
 
   return (
-    <div>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${activeTech === "all" ? "btn-primary" : ""}`}
-            onClick={() => setActiveTech("all")}
-          >
-            All {techs.length} Technologies
-          </button>
-          {techs.map((t) => (
-            <button
-              key={t.slug}
-              type="button"
-              className={`btn btn-sm ${activeTech === t.slug ? "btn-primary" : ""}`}
-              onClick={() => setActiveTech(t.slug)}
-            >
-              <span className="tech-dot" style={{ background: t.color, marginRight: 2 }} />
-              {t.name} ({Math.round(t.mastery_pct)}%)
-            </button>
-          ))}
+    <section className="card tracks-directory" aria-labelledby="tracks-heading">
+      <div className="tracks-heading-row">
+        <div>
+          <h2 id="tracks-heading">Learning tracks</h2>
+          <p>{technologies.length} technologies · {chapters} chapters</p>
         </div>
+        <label className="track-search">
+          <Search size={16} aria-hidden="true" />
+          <input type="search" aria-label="Find a track" placeholder="Find a track" value={query}
+            onChange={(event) => setQuery(event.target.value)} />
+        </label>
       </div>
-
-      <div style={{ display: "grid", gap: 16 }}>
-        {visible.map((t) => {
-          const chapters = sortAndNumberModules(t.modules || []);
-          const completedChapters = chapters.filter((c) => c.isCompleted).length;
-          const totalMinutes = chapters.reduce((sum, c) => sum + (c.mod.estimated_minutes || 0), 0);
-          const nextChapter = chapters.find((c) => !c.isCompleted) || null;
-          const showMultiHeader = chapters.length > 1;
-          const useTieredRoadmap = isSingleTechSelected && chapters.length >= 5;
-          const parts = useTieredRoadmap ? groupIntoSyllabusParts(chapters) : [];
-          const chapterPct = chapters.length > 0 ? Math.round((completedChapters / chapters.length) * 100) : 0;
-
-          return (
-            <div key={t.slug} className="card" data-testid={`track-section-${t.slug}`}>
-              <div className="track-roadmap-header">
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span className="tech-dot" style={{ background: t.color }} />
-                  <h3 style={{ margin: 0 }}>{t.name}</h3>
-                  <span className="muted" style={{ fontSize: "0.82rem" }}>{t.category}</span>
-                  {showMultiHeader && (
-                    <span className="badge badge-kind">
-                      {chapters.length} Chapters • ~{totalMinutes} min
+      {search && <p className="track-results" role="status">{matches} {matches === 1 ? "track" : "tracks"} found</p>}
+      {Array.from(groups, ([category, techs]) => (
+        <section className="track-group" key={category}>
+          <h3>{category}</h3>
+          <ul>
+            {techs.map((tech) => {
+              const count = tech.modules?.length ?? 0;
+              const pct = Math.round(tech.mastery_pct);
+              return (
+                <li key={tech.slug}>
+                  <a className="track-link" data-testid={`track-link-${tech.slug}`}
+                    href={routeToPath({ tab: "tracks", techSlug: tech.slug, moduleId: null })}
+                    onClick={(event) => followLink(event, () => onSelectTech(tech.slug))}>
+                    <span className="directory-track-dot" style={{background: tech.color}} />
+                    <span className="directory-track-text">
+                      <strong>{tech.name}</strong>
+                      <small>{count} {count === 1 ? "chapter" : "chapters"}{tech.xp > 0 || pct > 0 ? ` · ${pct}% mastery` : ""}</small>
                     </span>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: "0.85rem" }}>
-                    Lv.{t.level} • <strong>{Math.round(t.mastery_pct)}% Mastery</strong>
-                  </div>
-                  {showMultiHeader && nextChapter ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      data-testid={`continue-track-${t.slug}`}
-                      onClick={() => onOpenModule(nextChapter.mod.id)}
-                    >
-                      Continue Next Chapter (Ch. {nextChapter.chapterNum}) <ArrowRight size={13} />
-                    </button>
-                  ) : showMultiHeader && chapters.length > 0 ? (
-                    <span className="badge badge-done">
-                      <CheckCircle2 size={12} /> All {chapters.length} Chapters Mastered
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              {showMultiHeader && (
-                <div className="track-roadmap-progress" data-testid={`track-progress-${t.slug}`}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }} className="muted">
-                    <span>
-                      Track Roadmap Progress: <strong style={{ color: "var(--text)" }}>{completedChapters}/{chapters.length}</strong> chapters mastered ({chapterPct}%)
-                    </span>
-                    <span>
-                      {t.completed_activities}/{t.total_activities} activities cleared
-                    </span>
-                  </div>
-                  <div className="progress-track" style={{ marginBottom: 0 }}>
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${Math.max(t.mastery_pct, completedChapters > 0 ? chapterPct : 0)}%`,
-                        background: `linear-gradient(90deg, ${t.color}, var(--green-solid))`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {useTieredRoadmap ? (
-                <div className="syllabus-parts-list" data-testid={`syllabus-roadmap-${t.slug}`}>
-                  {parts.map((part) => {
-                    const partDone = part.items.filter((i) => i.isCompleted).length;
-                    return (
-                      <section
-                        key={part.key}
-                        className="syllabus-part"
-                        data-testid={`syllabus-part-${part.key}`}
-                      >
-                        <div className="syllabus-part-header">
-                          <div>
-                            <div className="syllabus-part-title">
-                              <PartIcon partKey={part.key} />
-                              <span>{part.title}</span>
-                            </div>
-                            <div className="muted" style={{ fontSize: "0.79rem", marginTop: 2 }}>
-                              {part.subtitle}
-                            </div>
-                          </div>
-                          <span className={`badge ${partDone === part.items.length ? "badge-done" : "badge-kind"}`}>
-                            {partDone}/{part.items.length} mastered
-                          </span>
-                        </div>
-                        <div className="grid-2">
-                          {part.items.map((ch) =>
-                            renderChapterCard(
-                              ch,
-                              t.color,
-                              nextChapter?.mod.id === ch.mod.id,
-                              true
-                            )
-                          )}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="grid-2">
-                  {chapters.map((ch) =>
-                    renderChapterCard(
-                      ch,
-                      t.color,
-                      showMultiHeader && nextChapter?.mod.id === ch.mod.id,
-                      showMultiHeader
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                    <ChevronRight size={15} aria-hidden="true" />
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+      {matches === 0 && (search
+        ? <button type="button" className="btn" onClick={() => setQuery("")}>Clear search</button>
+        : <p>No learning tracks are available yet.</p>)}
+    </section>
   );
 }

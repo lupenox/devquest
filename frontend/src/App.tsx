@@ -248,13 +248,16 @@ export function App() {
   );
 
   const handleBackFromModule = useCallback(() => {
-    if (internalNavDepthRef.current > 0 && window.history.length > 1) {
-      internalNavDepthRef.current -= 1;
+    // A chapter opened from a syllabus retains its origin in browser history after reload.
+    const entry = window.history.state;
+    const openedFromTrack = entry?.tab === "tracks" && entry.techSlug && entry.moduleId === route.moduleId;
+    if ((internalNavDepthRef.current > 0 || openedFromTrack) && window.history.length > 1) {
+      internalNavDepthRef.current = Math.max(0, internalNavDepthRef.current - 1);
       window.history.back();
     } else {
       navigate(returnRouteRef.current);
     }
-  }, [navigate]);
+  }, [navigate, route.moduleId]);
 
   const handleSyncGithub = useCallback(async () => {
     try {
@@ -290,7 +293,7 @@ export function App() {
 
   const activeTab = route.tab;
   const activeModuleId = route.moduleId;
-  const isDashboard = activeTab === "dashboard" && !activeModuleId;
+  const useCompactShell = !activeModuleId && (activeTab === "dashboard" || activeTab === "tracks");
   const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
 
   const connection = (
@@ -301,7 +304,7 @@ export function App() {
   );
 
   return (
-    <div className={isDashboard ? "app-shell dashboard-shell" : "app-shell"}>
+    <div className={useCompactShell ? "app-shell dashboard-shell" : "app-shell"}>
       <header className="hud-header">
         <a
           className="brand-row brand-home"
@@ -317,16 +320,16 @@ export function App() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <h1 className="brand-title">DevQuest</h1>
-              {!isDashboard && rankTitle && (
+              {!useCompactShell && rankTitle && (
                 <span className="rank-chip" data-testid="hud-rank">
                   <Shield size={12} /> {rankTitle}
                 </span>
               )}
             </div>
-            {!isDashboard && <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>}
+            {!useCompactShell && <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>}
           </div>
         </a>
-        {isDashboard && connection}
+        {useCompactShell && connection}
 
         <div className="hud-stats">
           <button
@@ -360,7 +363,7 @@ export function App() {
             </select>
           </label>
 
-          {dashboard && !isDashboard && (
+          {dashboard && !useCompactShell && (
             <>
               <div className="hud-pill" data-testid="hud-level">
                 <span className="level-badge">Lv.{dashboard.level}</span>
@@ -382,7 +385,7 @@ export function App() {
               </div>
             </>
           )}
-          {!isDashboard && connection}
+          {!useCompactShell && connection}
         </div>
       </header>
 
@@ -398,7 +401,7 @@ export function App() {
               aria-current={active ? "page" : undefined}
               onClick={() => openTab(tab)}
             >
-              <Icon size={15} /> {isDashboard ? compact : label}
+              <Icon size={15} /> {useCompactShell ? compact : label}
             </button>
           );
         })}
@@ -430,7 +433,12 @@ export function App() {
             onStartSprint={(mins) => openTab("sprint", mins)}
           />
         ) : activeTab === "tracks" ? (
-          <TracksView initialTech={route.techSlug} onOpenModule={openModule} />
+          <TracksView
+            techSlug={route.techSlug}
+            onSelectTech={openTech}
+            onAllTracks={() => openTab("tracks")}
+            onOpenModule={openModule}
+          />
         ) : activeTab === "sprint" ? (
           <SprintView
             technologies={dashboard.technologies}
@@ -451,7 +459,7 @@ export function App() {
       </main>
 
       {/* Mobile PWA Bottom Navigation Bar */}
-      {!isDashboard && (
+      {!useCompactShell && (
         <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           {NAV_ITEMS.filter((item) => item.mobile).map(({ tab, mobile, Icon }) => {
             const active = activeTab === tab && !activeModuleId;

@@ -268,50 +268,6 @@ def moving_average(values, window):
     });
   }
 
-  // 9b. Verify Tracks & zyBooks module cards render with light Frutiger Aero glass (no hardcoded dark #131928)
-  await page.getByRole("button", { name: /tracks & zybooks/i }).click();
-  await expect(page).toHaveURL(/\/tracks$/);
-  const trackModCard = page.locator(".track-module-card").first();
-  await expect(trackModCard).toBeVisible({ timeout: 10000 });
-  const trackCardBg = await trackModCard.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(trackCardBg).not.toBe("rgb(19, 25, 40)");
-  if (shotDir) {
-    await page.mouse.move(10, 10);
-    await page.screenshot({
-      path: path.join(shotDir, "v2_frutiger_aero_tracks.png"),
-      fullPage: false,
-      animations: "disabled",
-    });
-  }
-
-  // 9c. Verify Python 16-Chapter Beginning-to-End zyBooks Textbook Syllabus Roadmap on /tracks/python
-  await page.goto("/tracks/python");
-  await expect(page).toHaveURL(/\/tracks\/python$/);
-  await expect(page.getByTestId("syllabus-roadmap-python")).toBeVisible({ timeout: 10000 });
-  await expect(page.getByTestId("track-progress-python")).toBeVisible();
-  await expect(page.getByTestId("continue-track-python")).toContainText(/Continue Next Chapter \(Ch\. \d+\)/);
-  await expect(page.getByTestId("syllabus-part-foundations")).toContainText("Part 1: Foundations (Beginner)");
-  await expect(page.getByTestId("syllabus-part-intermediate")).toContainText("Part 2: Intermediate & Katas");
-  await expect(page.getByTestId("syllabus-part-advanced")).toContainText("Part 3: Advanced & Async");
-  await expect(page.getByTestId("syllabus-part-boss")).toContainText("Part 4: Boss Projects");
-
-  const pySection = page.getByTestId("track-section-python");
-  const pyCards = pySection.locator(".track-module-card");
-  await expect(pyCards).toHaveCount(16);
-  for (let ch = 1; ch <= 16; ch++) {
-    await expect(pyCards.nth(ch - 1)).toContainText(`Ch. ${ch}`);
-  }
-
-  if (shotDir) {
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.mouse.move(10, 10);
-    await page.screenshot({
-      path: path.join(shotDir, "v2_python_16ch_syllabus.png"),
-      fullPage: false,
-      animations: "disabled",
-    });
-  }
-
   // 10. Verify Repo Mock Interviewer grades an answer and displays Readiness %
   await page.getByRole("button", { name: /repo interview prep/i }).click();
   await expect(page).toHaveURL(/\/repos$/);
@@ -367,4 +323,66 @@ def moving_average(values, window):
       animations: "disabled",
     });
   }
+});
+
+test("browse tracks, search, open a chapter and return to its syllabus", async ({ page }) => {
+  await page.setViewportSize({ width: 896, height: 929 });
+  await page.goto("/tracks");
+  const query = page.getByRole("searchbox", { name: "Find a track" });
+  const tracks = page.locator('main a[data-testid^="track-link-"]');
+  await expect(tracks).toHaveCount(17);
+  await expect(page.locator('[data-testid^="track-module-"]')).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button")).toHaveCount(7);
+
+  const shotDir = process.env.CAPTURE_WALKTHROUGH_DIR;
+  if (shotDir) {
+    await page.screenshot({ path: path.join(shotDir, "v2_frutiger_aero_tracks.png"), animations: "disabled" });
+  }
+
+  await query.fill("no-such-track");
+  await expect(tracks).toHaveCount(0);
+  await query.fill("pYtHoN");
+  await expect(tracks).toHaveCount(1);
+  const python = page.getByTestId("track-link-python");
+  await expect(python).toHaveAttribute("href", "/tracks/python");
+  await python.click();
+  await expect(page).toHaveURL(/\/tracks\/python$/);
+  await page.reload();
+
+  const roadmap = page.getByTestId("syllabus-roadmap-python");
+  const chapterRows = roadmap.locator('[data-testid^="track-module-"]');
+  await expect(page.getByTestId("track-progress-python")).toBeVisible();
+  await expect(page.getByTestId("continue-track-python")).toBeVisible();
+  await expect(chapterRows).toHaveCount(16);
+  await expect(roadmap.locator("details[open]")).toHaveCount(1);
+  for (const part of ["foundations", "intermediate", "advanced", "boss"]) {
+    await expect(page.getByTestId(`syllabus-part-${part}`).locator("summary")).toBeVisible();
+  }
+  for (let i = 0; i < 16; i++) {
+    await expect(chapterRows.nth(i).locator('[data-testid^="chapter-num-"]')).toHaveText(`Ch. ${i + 1}`);
+  }
+  if (shotDir) {
+    await page.screenshot({ path: path.join(shotDir, "v2_python_16ch_syllabus.png"), animations: "disabled" });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const capstone = page.getByTestId("track-module-py-16-boss-async-pipeline");
+  await expect(capstone).toBeHidden();
+  await page.getByTestId("syllabus-part-boss").locator("summary").press("Enter");
+  await capstone.click();
+  await expect(page).toHaveURL(/\/modules\/py-16-boss-async-pipeline$/);
+  await page.reload();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(roadmap).toBeVisible();
+  await expect(page).toHaveURL(/\/tracks\/python$/);
+
+  await page.getByRole("combobox", { name: "Switch track" }).selectOption("sql");
+  await expect(page).toHaveURL(/\/tracks\/sql$/);
+  await page.goBack();
+  await expect(roadmap).toBeVisible();
+  await page.getByRole("link", { name: "All tracks", exact: true }).click();
+  await expect(page).toHaveURL(/\/tracks$/);
+  await expect(tracks).toHaveCount(17);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

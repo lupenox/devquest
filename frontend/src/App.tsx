@@ -1,35 +1,161 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Flame,
   FolderGit2,
   GitBranch,
   LayoutDashboard,
+  Palette,
   RefreshCw,
+  Search,
+  Shield,
   Swords,
   Terminal,
+  Trophy,
+  Zap,
 } from "lucide-react";
 import { api, connectEvents } from "./api";
 import { BossProjectsView } from "./components/BossProjectsView";
-import { DashboardView } from "./components/DashboardView";
+import { CommandPalette } from "./components/CommandPalette";
+import { DashboardView, fallbackRankTitle } from "./components/DashboardView";
 import { ModuleView } from "./components/ModuleView";
 import { RepoInterviewView } from "./components/RepoInterviewView";
 import { SkillTreeView } from "./components/SkillTreeView";
+import { SprintView } from "./components/SprintView";
 import { SyncAndForgeView } from "./components/SyncAndForgeView";
 import { TracksView } from "./components/TracksView";
-import type { DashboardData, GradeOutcome } from "./types";
+import {
+  getCurrentRoute,
+  pushRoute,
+  subscribePopState,
+  type AppRoute,
+  type NavTab,
+} from "./router";
+import type { DashboardData, GradeOutcome, SprintCompleteResp, ThemeId, UnlockedAchievement } from "./types";
 
-type Tab = "dashboard" | "tracks" | "repos" | "tree" | "projects" | "forge";
+const THEME_STORAGE_KEY = "devquest_theme";
+const VALID_THEMES: ThemeId[] = [
+  "emerald-3d",
+  "frutiger-aero",
+  "tokyo-night",
+  "catppuccin",
+  "gruvbox",
+  "kanagawa",
+];
+
+const THEME_META_COLORS: Record<ThemeId, string> = {
+  "emerald-3d": "#041311",
+  "frutiger-aero": "#7ad9f5",
+  "tokyo-night": "#0d111a",
+  catppuccin: "#11111b",
+  gruvbox: "#1d2021",
+  kanagawa: "#16161d",
+};
+
+function loadInitialTheme(): ThemeId {
+  try {
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeId | null;
+    if (saved && VALID_THEMES.includes(saved)) return saved;
+  } catch {
+    // ignore storage errors
+  }
+  return "emerald-3d";
+}
+
+function isEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
+}
 
 export function App() {
-  const [tab, setTab] = useState<Tab>("dashboard");
-  const [selectedTech, setSelectedTech] = useState<string | null>(null);
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
+  const [route, setRoute] = useState<AppRoute>(() => getCurrentRoute());
+  const [theme, setTheme] = useState<ThemeId>(() => loadInitialTheme());
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [wsOnline, setWsOnline] = useState(false);
   const [liveOutcome, setLiveOutcome] = useState<GradeOutcome | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [achievementToast, setAchievementToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const returnRouteRef = useRef<AppRoute>({ tab: "dashboard", techSlug: null, moduleId: null });
+  const internalNavDepthRef = useRef(0);
+  const toastTimerRef = useRef<number | null>(null);
+  const achTimerRef = useRef<number | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 4500);
+  }, []);
+
+  const showAchievementToast = useCallback((items: UnlockedAchievement[]) => {
+    if (!items || items.length === 0) return;
+    const summary = items
+      .map((a) => `${a.name}${a.bonus_xp ? ` (+${a.bonus_xp} XP)` : ""}`)
+      .join(" • ");
+    setAchievementToast(`Achievement Unlocked: ${summary}`);
+    if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
+    achTimerRef.current = window.setTimeout(() => setAchievementToast(null), 5500);
+  }, []);
+
+  const applyTheme = useCallback((next: ThemeId) => {
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute("content", THEME_META_COLORS[theme] || "#041311");
+    }
+  }, [theme]);
+
+  // URL History API synchronization
+  useEffect(() => {
+    return subscribePopState((nextRoute) => {
+      setRoute(nextRoute);
+    });
+  }, []);
+
+  const navigate = useCallback((next: AppRoute) => {
+    if (!next.moduleId) {
+      returnRouteRef.current = next;
+    }
+    internalNavDepthRef.current += 1;
+    pushRoute(next);
+    setRoute(next);
+  }, []);
+
+  // Global keyboard shortcuts: Ctrl+K / Cmd+K and '/' outside inputs
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+        return;
+      }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableElement(e.target)) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -53,43 +179,163 @@ export function App() {
         loadDashboard();
         if (res.passed) {
           const bonusTxt = res.par_bonus ? ` + ${res.par_bonus} Vim Par Bonus!` : "";
-          setToast(`✓ ${res.tech_name} Mastery ${Math.round(res.tech_mastery_pct)}% (+${res.xp_awarded} XP${bonusTxt})`);
-          setTimeout(() => setToast(null), 4500);
+          showToast(
+            `✓ ${res.tech_name} Mastery ${Math.round(res.tech_mastery_pct)}% (+${res.xp_awarded} XP${bonusTxt})`
+          );
         }
-      } else if (evt.type === "sync_complete" || evt.type === "module_generated") {
+        if (res.unlocked_achievements && res.unlocked_achievements.length > 0) {
+          showAchievementToast(res.unlocked_achievements);
+        }
+      } else if (evt.type === "achievement_unlocked") {
+        loadDashboard();
+        const payload = evt.payload;
+        if (Array.isArray(payload)) {
+          showAchievementToast(payload);
+        } else if (Array.isArray(payload?.achievements)) {
+          showAchievementToast(payload.achievements);
+        } else if (payload && payload.name) {
+          showAchievementToast([payload as UnlockedAchievement]);
+        }
+      } else if (
+        evt.type === "sync_complete" ||
+        evt.type === "module_generated" ||
+        evt.type === "sprint_completed" ||
+        evt.type === "interview_completed"
+      ) {
         loadDashboard();
       }
     }, setWsOnline);
-  }, [loadDashboard]);
+  }, [loadDashboard, showToast, showAchievementToast]);
 
-  const openTech = (slug: string) => {
-    setSelectedTech(slug);
-    setActiveModuleId(null);
-    setTab("tracks");
-  };
+  const openTab = useCallback(
+    (tab: NavTab, sprintMinutes?: number) => {
+      navigate({
+        tab,
+        techSlug: null,
+        moduleId: null,
+        sprintMinutes: tab === "sprint" ? sprintMinutes : undefined,
+      });
+    },
+    [navigate]
+  );
 
-  const openModule = (id: string) => {
-    setActiveModuleId(id);
-  };
+  const openTech = useCallback(
+    (slug: string) => {
+      navigate({ tab: "tracks", techSlug: slug, moduleId: null });
+    },
+    [navigate]
+  );
+
+  const openModule = useCallback(
+    (id: string) => {
+      if (!route.moduleId) {
+        returnRouteRef.current = route;
+      }
+      navigate({ ...route, moduleId: id });
+    },
+    [navigate, route]
+  );
+
+  const handleBackFromModule = useCallback(() => {
+    if (internalNavDepthRef.current > 0 && window.history.length > 1) {
+      internalNavDepthRef.current -= 1;
+      window.history.back();
+    } else {
+      navigate(returnRouteRef.current);
+    }
+  }, [navigate]);
+
+  const handleSyncGithub = useCallback(async () => {
+    try {
+      const res = await api.runSync("github");
+      const first = res.results?.[0];
+      showToast(
+        first?.ok
+          ? `✓ Synced ${first.repo_count ?? ""} GitHub repos (+${first.xp_awarded || 0} XP)`
+          : first?.error || "GitHub sync finished"
+      );
+      loadDashboard();
+    } catch (e: any) {
+      showToast(`GitHub sync failed: ${e?.message || "error"}`);
+    }
+  }, [loadDashboard, showToast]);
+
+  const handleSprintCompleted = useCallback(
+    (resp: SprintCompleteResp) => {
+      loadDashboard();
+      if (resp.bonus_xp > 0) {
+        showToast(`⚡ Sprint Complete! +${resp.bonus_xp} Combo Bonus XP`);
+      }
+      if (resp.unlocked_achievements && resp.unlocked_achievements.length > 0) {
+        showAchievementToast(resp.unlocked_achievements);
+      }
+    },
+    [loadDashboard, showToast, showAchievementToast]
+  );
 
   const levelPct = dashboard
     ? Math.min(100, Math.round((dashboard.xp_in_level / Math.max(1, dashboard.xp_for_next)) * 100))
     : 0;
 
+  const activeTab = route.tab;
+  const activeModuleId = route.moduleId;
+  const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
+
   return (
     <div className="app-shell">
       <header className="hud-header">
-        <div className="brand-row">
+        <div
+          className="brand-row"
+          style={{ cursor: "pointer" }}
+          onClick={() => openTab("dashboard")}
+        >
           <div className="brand-icon">
             <Terminal size={22} />
           </div>
           <div>
-            <h1 className="brand-title">DevQuest</h1>
-            <p className="brand-sub">Neovim-First • zyBooks • LeetCode • Boss Projects • $0/mo</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <h1 className="brand-title">DevQuest</h1>
+              {rankTitle && (
+                <span className="rank-chip" data-testid="hud-rank">
+                  <Shield size={12} /> {rankTitle}
+                </span>
+              )}
+            </div>
+            <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>
           </div>
         </div>
 
         <div className="hud-stats">
+          <button
+            type="button"
+            className="cmd-trigger"
+            data-testid="cmd-palette-trigger"
+            onClick={() => setPaletteOpen(true)}
+            title="Open Command Palette (Ctrl+K or /)"
+          >
+            <Search size={14} />
+            <span>Search...</span>
+            <kbd className="kbd">Ctrl+K</kbd>
+          </button>
+
+          <label className="hud-pill theme-pill" title="Switch Neovim Color Theme">
+            <Palette size={14} color="var(--accent-2)" />
+            <select
+              className="theme-select"
+              data-testid="theme-switcher"
+              aria-label="Color Theme"
+              value={theme}
+              onChange={(e) => applyTheme(e.target.value as ThemeId)}
+            >
+              <option value="emerald-3d">Emerald 3D Glass</option>
+              <option value="frutiger-aero">Frutiger Aero</option>
+              <option value="tokyo-night">Tokyo Night</option>
+              <option value="catppuccin">Catppuccin Mocha</option>
+              <option value="gruvbox">Gruvbox Dark</option>
+              <option value="kanagawa">Kanagawa Wave</option>
+            </select>
+          </label>
+
           {dashboard && (
             <>
               <div className="hud-pill" data-testid="hud-level">
@@ -102,11 +348,11 @@ export function App() {
                 </div>
               </div>
               <div className="hud-pill" data-testid="hud-streak">
-                <Flame size={16} color="#f7768e" />
+                <Flame size={16} color="var(--red)" />
                 <strong>{dashboard.streak_days}d</strong>
                 <span className="muted">streak</span>
               </div>
-              <div className="hud-pill">
+              <div className="hud-pill hud-hide-sm">
                 <strong>{dashboard.completed_activities}/{dashboard.total_activities}</strong>
                 <span className="muted">mastered</span>
               </div>
@@ -122,43 +368,50 @@ export function App() {
       <nav className="nav-tabs" aria-label="Main navigation">
         <button
           type="button"
-          className={`nav-btn ${tab === "dashboard" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("dashboard"); }}
+          className={`nav-btn ${activeTab === "dashboard" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("dashboard")}
         >
           <LayoutDashboard size={15} /> Mastery Dashboard
         </button>
         <button
           type="button"
-          className={`nav-btn ${tab === "tracks" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("tracks"); }}
+          className={`nav-btn ${activeTab === "tracks" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("tracks")}
         >
           <BookOpen size={15} /> Tracks &amp; zyBooks
         </button>
         <button
           type="button"
-          className={`nav-btn ${tab === "repos" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("repos"); }}
+          className={`nav-btn ${activeTab === "sprint" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("sprint")}
+        >
+          <Zap size={15} /> AI Break Sprint
+        </button>
+        <button
+          type="button"
+          className={`nav-btn ${activeTab === "repos" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("repos")}
         >
           <FolderGit2 size={15} /> Repo Interview Prep
         </button>
         <button
           type="button"
-          className={`nav-btn ${tab === "tree" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("tree"); }}
+          className={`nav-btn ${activeTab === "tree" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("tree")}
         >
           <GitBranch size={15} /> Skill Tree
         </button>
         <button
           type="button"
-          className={`nav-btn ${tab === "projects" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("projects"); }}
+          className={`nav-btn ${activeTab === "projects" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("projects")}
         >
           <Swords size={15} /> Boss Projects
         </button>
         <button
           type="button"
-          className={`nav-btn ${tab === "forge" && !activeModuleId ? "active" : ""}`}
-          onClick={() => { setActiveModuleId(null); setTab("forge"); }}
+          className={`nav-btn ${activeTab === "forge" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("forge")}
         >
           <RefreshCw size={15} /> Sync &amp; AI Forge
         </button>
@@ -175,34 +428,109 @@ export function App() {
           <ModuleView
             moduleId={activeModuleId}
             liveOutcome={liveOutcome}
-            onBack={() => setActiveModuleId(null)}
+            onBack={handleBackFromModule}
             onProgressUpdated={loadDashboard}
           />
         ) : !dashboard ? (
           <div className="card">Loading DevQuest RPG Mastery Dashboard...</div>
-        ) : tab === "dashboard" ? (
+        ) : activeTab === "dashboard" ? (
           <DashboardView
             data={dashboard}
             onSelectTech={openTech}
             onOpenModule={openModule}
-            onGoToForge={() => setTab("forge")}
+            onGoToForge={() => openTab("forge")}
+            onStartSprint={(mins) => openTab("sprint", mins)}
           />
-        ) : tab === "tracks" ? (
-          <TracksView initialTech={selectedTech} onOpenModule={openModule} />
-        ) : tab === "repos" ? (
+        ) : activeTab === "tracks" ? (
+          <TracksView initialTech={route.techSlug} onOpenModule={openModule} />
+        ) : activeTab === "sprint" ? (
+          <SprintView
+            technologies={dashboard.technologies}
+            initialDuration={route.sprintMinutes}
+            liveOutcome={liveOutcome}
+            onSprintCompleted={handleSprintCompleted}
+            onBackToDashboard={() => openTab("dashboard")}
+          />
+        ) : activeTab === "repos" ? (
           <RepoInterviewView onOpenModule={openModule} onUpdated={loadDashboard} />
-        ) : tab === "tree" ? (
+        ) : activeTab === "tree" ? (
           <SkillTreeView onOpenModule={openModule} />
-        ) : tab === "projects" ? (
+        ) : activeTab === "projects" ? (
           <BossProjectsView onOpenModule={openModule} />
         ) : (
           <SyncAndForgeView dashboard={dashboard} onSynced={loadDashboard} onOpenModule={openModule} />
         )}
       </main>
 
-      {toast && (
-        <div className="toast" role="status" data-testid="xp-toast">
-          {toast}
+      {/* Mobile PWA Bottom Navigation Bar */}
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === "dashboard" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("dashboard")}
+        >
+          <LayoutDashboard size={18} />
+          <span>Home</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === "tracks" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("tracks")}
+        >
+          <BookOpen size={18} />
+          <span>Tracks</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === "sprint" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("sprint")}
+        >
+          <Zap size={18} />
+          <span>Sprint</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === "repos" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("repos")}
+        >
+          <FolderGit2 size={18} />
+          <span>Repos</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeTab === "tree" && !activeModuleId ? "active" : ""}`}
+          onClick={() => openTab("tree")}
+        >
+          <GitBranch size={18} />
+          <span>Tree</span>
+        </button>
+      </nav>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        currentTheme={theme}
+        technologies={dashboard?.technologies}
+        onNavigateTab={openTab}
+        onSelectTech={openTech}
+        onOpenModule={openModule}
+        onChangeTheme={applyTheme}
+        onSyncGithub={handleSyncGithub}
+      />
+
+      {(toast || achievementToast) && (
+        <div className="toast-stack">
+          {achievementToast && (
+            <div className="toast toast-achievement" role="status" data-testid="achievement-toast">
+              <Trophy size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
+              <span>{achievementToast}</span>
+            </div>
+          )}
+          {toast && (
+            <div className="toast" role="status" data-testid="xp-toast">
+              {toast}
+            </div>
+          )}
         </div>
       )}
     </div>

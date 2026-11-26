@@ -1,11 +1,78 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-test("DevQuest full RPG + zyBooks + Live Neovim WebSocket grading flow", async ({ page, request }) => {
-  await page.goto("/");
+async function solveBrowserDrillInUi(page: Page, activity: any) {
+  const card = page.getByTestId(`activity-${activity.id}`);
+  await expect(card).toBeVisible({ timeout: 10000 });
 
-  // 1. Verify HUD & all 17 technologies (including Debugging) render on Mastery Dashboard
+  if (activity.activity_type === "read_check") {
+    const options: string[] = activity.spec.options || [];
+    const correctIdx: number = activity.spec.correct_index ?? 0;
+    await card.locator(".option-btn").nth(correctIdx).click();
+    await card.getByRole("button", { name: /check answer/i }).click();
+  } else if (activity.activity_type === "fill_blank") {
+    const blanks: any[] = activity.spec.blanks || [];
+    for (let i = 0; i < blanks.length; i++) {
+      const answer = blanks[i].accepted?.[0] ?? blanks[i].expected ?? "";
+      await card.getByLabel(`Blank ${i + 1}`).fill(String(answer));
+    }
+    await card.getByRole("button", { name: /verify blanks/i }).click();
+  } else if (activity.activity_type === "code_trace") {
+    const checkpoints: any[] = activity.spec.checkpoints || [];
+    const inputs = card.locator("input.input-field");
+    for (let i = 0; i < checkpoints.length; i++) {
+      const expected = checkpoints[i].expected ?? checkpoints[i].accepted?.[0] ?? "";
+      await inputs.nth(i).fill(String(expected));
+    }
+    await card.getByRole("button", { name: /verify trace/i }).click();
+  } else if (activity.activity_type === "pdb_sim") {
+    const input = page.getByTestId(`pdb-input-${activity.id}`);
+    const runBtn = page.getByTestId(`pdb-run-${activity.id}`);
+    for (const cmd of ["n", "p total", "w"]) {
+      await input.fill(cmd);
+      await runBtn.click();
+    }
+  } else if (activity.activity_type === "parsons") {
+    const targetOrder: number[] = activity.spec.correct_order || [];
+    // Simulate moving rows until order matches targetOrder
+    const current = targetOrder.map((_, i) => i);
+    for (let pos = 0; pos < targetOrder.length; pos++) {
+      const want = targetOrder[pos];
+      let idx = current.indexOf(want);
+      while (idx > pos) {
+        await card.getByLabel(`Move line ${idx + 1} up`).click();
+        [current[idx - 1], current[idx]] = [current[idx], current[idx - 1]];
+        idx -= 1;
+      }
+    }
+    await card.getByRole("button", { name: /check line order/i }).click();
+  }
+
+  await expect(page.getByTestId(`feedback-${activity.id}`)).toContainText("Passed!", { timeout: 10000 });
+}
+
+test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds, Sprint, Themes, SVG Skill Tree, Mock Interview & PWA", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  await page.setViewportSize({ width: 1400, height: 950 });
+  const shotDir = process.env.CAPTURE_WALKTHROUGH_DIR || "";
+
+  // 1. Verify PWA manifest & service worker endpoints return HTTP 200 valid responses
+  const manifestResp = await request.get("/manifest.webmanifest");
+  expect(manifestResp.status()).toBe(200);
+  const manifestJson = await manifestResp.json();
+  expect(manifestJson.name).toContain("DevQuest");
+  expect(manifestJson.display).toBe("standalone");
+  expect(Array.isArray(manifestJson.icons) && manifestJson.icons.length > 0).toBeTruthy();
+
+  const swResp = await request.get("/sw.js");
+  expect(swResp.status()).toBe(200);
+
+  // 2. Load Dashboard, verify all 17 technologies, HUD Rank, Achievements Shelf & Neovim Live WS
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: "DevQuest" })).toBeVisible();
   for (const slug of [
     "neovim", "python", "fastapi", "bash", "typescript", "javascript",
@@ -13,31 +80,98 @@ test("DevQuest full RPG + zyBooks + Live Neovim WebSocket grading flow", async (
   ]) {
     await expect(page.getByTestId(`tech-card-${slug}`)).toBeVisible();
   }
+  await expect(page.getByText("Neovim Live")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("player-rank-badge")).toBeVisible();
+  await expect(page.getByTestId("achievements-shelf")).toBeVisible();
 
-  // Wait for WebSocket live indicator
+  // 3. Theme switching: default emerald-3d -> frutiger-aero -> catppuccin -> gruvbox -> emerald-3d
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "emerald-3d");
+  const switcher = page.getByTestId("theme-switcher");
+  await switcher.selectOption("frutiger-aero");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
+  await switcher.selectOption("catppuccin");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "catppuccin");
+  await switcher.selectOption("gruvbox");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "gruvbox");
+  await switcher.selectOption("emerald-3d");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "emerald-3d");
+
+  // 4. Ctrl+K Command Palette search for "pdb" -> /modules/debugging-pdb-101 + reload via SPA fallback!
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-input").fill("pdb");
+  const pdbHit = page.getByTestId("palette-item-mod-debugging-pdb-101");
+  await expect(pdbHit).toBeVisible({ timeout: 5000 });
+  await pdbHit.click();
+
+  await expect(page).toHaveURL(/\/modules\/debugging-pdb-101$/);
+  await expect(page.getByText("Python Debugger (pdb & breakpoint()): Stepping, Frames & Bug Hunting")).toBeVisible();
+
+  // Browser reload must work seamlessly via FastAPI SPA catch-all fallback
+  await page.reload();
+  await expect(page).toHaveURL(/\/modules\/debugging-pdb-101$/);
+  await expect(page.getByTestId("pdb-sim-dbg-101-pdb-sim")).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("Neovim Live")).toBeVisible({ timeout: 10000 });
 
-  if (process.env.CAPTURE_WALKTHROUGH_DIR) {
-    await page.setViewportSize({ width: 1400, height: 950 });
+  // 5. Complete interactive pdb_sim commands (n, p total, w) -> earns XP + Achievement toast!
+  const pdbCard = page.getByTestId("activity-dbg-101-pdb-sim");
+  await pdbCard.scrollIntoViewIfNeeded();
+  const pdbInput = page.getByTestId("pdb-input-dbg-101-pdb-sim");
+  const pdbRun = page.getByTestId("pdb-run-dbg-101-pdb-sim");
+
+  await pdbInput.fill("n");
+  await pdbRun.click();
+  await expect(page.getByTestId("pdb-obj-step")).toHaveClass(/done/);
+
+  await pdbInput.fill("n");
+  await pdbRun.click();
+
+  await pdbInput.fill("p total");
+  await pdbRun.click();
+  await expect(page.getByTestId("pdb-obj-inspect_var:total")).toHaveClass(/done/);
+
+  await pdbInput.fill("w");
+  await pdbRun.click();
+  await expect(page.getByTestId("pdb-obj-stack")).toHaveClass(/done/);
+
+  await expect(page.getByTestId("feedback-dbg-101-pdb-sim")).toContainText("Passed! +30 XP", { timeout: 10000 });
+  await expect(page.getByTestId("achievement-toast")).toContainText("Achievement Unlocked", { timeout: 10000 });
+  // Ensure background silent module refresh preserves PdbSim widget state without unmounting
+  await expect(page.getByTestId("pdb-obj-step")).toHaveClass(/done/);
+  await expect(page.getByTestId("pdb-obj-inspect_var:total")).toHaveClass(/done/);
+  await expect(page.getByTestId("pdb-obj-stack")).toHaveClass(/done/);
+  await expect(pdbCard).toContainText("All debugging objectives completed!");
+
+  if (shotDir) {
+    await pdbCard.scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: path.join(process.env.CAPTURE_WALKTHROUGH_DIR, "dashboard_initial.png"),
-      fullPage: true,
+      path: path.join(shotDir, "v2_pdb_sim_debugger.png"),
+      fullPage: false,
     });
   }
 
-  // 2. Open Python track -> zyBooks module
-  await page.getByTestId("tech-card-python").click();
-  await page.getByRole("button", { name: /open/i }).first().click();
+  // 6. Verify Live Quick Playground inside SQL intermediate lab (direct URL via SPA fallback)
+  await page.goto("/modules/sql-window-functions-201");
+  await expect(page.getByText("SQL Window Functions: ROW_NUMBER, RANK & OVER (PARTITION BY)")).toBeVisible();
+  const sqlToggle = page.getByTestId("playground-toggle-sql-201-nvim-lab");
+  await sqlToggle.scrollIntoViewIfNeeded();
+  await sqlToggle.click();
+  const sqlPlayground = page.getByTestId("sql-playground-sql-201-nvim-lab");
+  await expect(sqlPlayground).toBeVisible();
+  await sqlPlayground.getByRole("button", { name: /run sql query/i }).click();
+  await expect(sqlPlayground).toContainText("7 rows", { timeout: 10000 });
+
+  // 7. Verify Python zyBooks + Live Neovim :w WebSocket grading + Vim Par Bonus regression check
+  await page.goto("/modules/python-comprehensions-101");
   await expect(page.getByText("1.1 List Comprehensions vs Generator Expressions")).toBeVisible();
 
-  // 3. Complete zyBooks Read Check participation activity in browser
   const rcCard = page.getByTestId("activity-py-101-read-check");
   await rcCard.getByText("sum(e * e for e in stream)").click();
   await rcCard.getByRole("button", { name: /check answer/i }).click();
   await expect(page.getByTestId("feedback-py-101-read-check")).toContainText("Passed!");
 
-  // 4. Simulate Neovim `:w` auto-grade on the Python Neovim Lab and verify live WebSocket toast!
   const labCard = page.getByTestId("activity-py-101-nvim-lab");
+  await expect(page.getByTestId("open-terminal-py-101-nvim-lab")).toBeVisible();
   await labCard.getByRole("button", { name: /prepare neovim workspace/i }).click();
   await expect(labCard).toContainText("nvim solution.py");
 
@@ -57,7 +191,6 @@ def moving_average(values, window):
 `
   );
 
-  // Trigger /api/grade exactly like devquest.nvim does on :w (with keystrokes under par!)
   const gradeResp = await request.post("/api/grade", {
     data: {
       activity_id: "py-101-nvim-lab",
@@ -66,40 +199,89 @@ def moving_average(values, window):
     },
   });
   expect(gradeResp.ok()).toBeTruthy();
-
-  // Assert live WebSocket XP toast & live HUD XP update without page reload!
-  await expect(page.getByTestId("xp-toast")).toContainText("Python Mastery");
+  await expect(page.getByTestId("xp-toast")).toContainText("Python Mastery", { timeout: 10000 });
   await expect(page.getByTestId("xp-toast")).toContainText("Vim Par Bonus");
-  await expect(page.getByTestId("hud-level")).toContainText("XP");
 
-  if (process.env.CAPTURE_WALKTHROUGH_DIR) {
+  // 8. Start & complete a 2-min AI Break Sprint -> awards Combo XP!
+  await page.getByRole("button", { name: /ai break sprint/i }).click();
+  await expect(page).toHaveURL(/\/sprint$/);
+  await page.getByTestId("sprint-dur-2").click();
+
+  const sprintStartPromise = page.waitForResponse(
+    (resp) => resp.url().includes("/api/sprint/start") && resp.status() === 200
+  );
+  await page.getByTestId("sprint-start-btn").click();
+  const sprintStartJson = await (await sprintStartPromise).json();
+  expect(sprintStartJson.activities.length).toBeGreaterThanOrEqual(2);
+
+  for (let i = 0; i < sprintStartJson.activities.length; i++) {
+    await solveBrowserDrillInUi(page, sprintStartJson.activities[i]);
+    if (i === 0) {
+      await expect(page.getByTestId("sprint-combo")).toContainText("1.5x Combo");
+    } else if (i === 1) {
+      await expect(page.getByTestId("sprint-combo")).toContainText("2x Combo");
+    }
+    await page.getByTestId("sprint-next-btn").click();
+  }
+
+  await expect(page.getByTestId("sprint-summary")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("sprint-bonus-xp")).toContainText(/\+[1-9]\d* XP/);
+
+  // 9. Verify Interactive SVG Skill Tree renders <path> prerequisite connectors
+  await page.getByRole("button", { name: /skill tree/i }).click();
+  await expect(page).toHaveURL(/\/tree$/);
+  await expect(page.getByText("Developer RPG Skill Tree")).toBeVisible();
+  const svgPaths = page.locator('svg[data-testid="skill-tree-connectors"] path.st-edge');
+  await expect(svgPaths.first()).toBeVisible({ timeout: 10000 });
+  expect(await svgPaths.count()).toBeGreaterThanOrEqual(6);
+  await expect(page.getByTestId("tree-node-fastapi-di-middleware-201")).toBeVisible();
+
+  if (shotDir) {
     await page.screenshot({
-      path: path.join(process.env.CAPTURE_WALKTHROUGH_DIR, "zybooks_live_graded.png"),
-      fullPage: true,
+      path: path.join(shotDir, "v2_skill_tree.png"),
+      fullPage: false,
     });
   }
 
-  // 5. Verify Repo Interview Prep, Skill Tree, Boss Projects, and Sync & AI Forge tabs render cleanly
+  // 10. Verify Repo Mock Interviewer grades an answer and displays Readiness %
   await page.getByRole("button", { name: /repo interview prep/i }).click();
+  await expect(page).toHaveURL(/\/repos$/);
   await expect(page.getByText("Study Any GitHub Repo for Interviews")).toBeVisible();
 
-  await page.getByRole("button", { name: /skill tree/i }).click();
-  await expect(page.getByText("Developer RPG Skill Tree")).toBeVisible();
+  await page.getByPlaceholder("owner/repo or https://github.com/owner/repo").fill("lupenox/devquest");
+  await page.getByTestId("custom-start-mock-interview").click();
+  await expect(page.getByTestId("mock-interview-panel")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByTestId("mock-interview-question")).toBeVisible();
 
-  await page.getByRole("button", { name: /boss projects/i }).click();
-  await expect(page.getByText("URL Shortener & Click Analytics API")).toBeVisible();
+  await page.getByTestId("mock-interview-answer").fill(
+    "First, DevQuest solves hands-on full-stack and Neovim practice with zero monthly cost. " +
+    "We chose FastAPI and SQLite in `backend/app/main.py` and `backend/app/db.py` paired with a React TypeScript SPA " +
+    "because local execution keeps latency low and avoids cloud infrastructure. " +
+    "The key trade-off is SQLite single-writer concurrency versus PostgreSQL at high scale, mitigated via short transactions and clear module separation."
+  );
+  await page.getByTestId("mock-interview-submit").click();
+  await expect(page.getByTestId("mock-interview-rubric")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("mock-interview-rubric")).toContainText("Clarity");
+  await expect(page.getByTestId("mock-interview-rubric")).toContainText("Technical Accuracy");
+  await expect(page.getByTestId("mock-interview-rubric")).toContainText("Code References");
+  await expect(page.getByTestId("mock-interview-rubric")).toContainText("Trade-Offs");
+  await expect(page.getByTestId("mock-interview-readiness")).toContainText(/Readiness \d+%/);
 
-  await page.getByRole("button", { name: /sync & ai forge/i }).click();
-  await expect(page.getByText("Local Ollama zyBooks Module Forge")).toBeVisible();
-
-  // 6. Return to Mastery Dashboard and verify updated Python + Neovim mastery progress bars
+  // 11. Return to Mastery Dashboard, verify unlocked XP & Achievements, capture Dashboard screenshot
   await page.getByRole("button", { name: /mastery dashboard/i }).click();
-  await expect(page.getByTestId("tech-card-python")).toContainText("80 XP");
-  await expect(page.getByTestId("tech-card-neovim")).toContainText("20 XP");
-  if (process.env.CAPTURE_WALKTHROUGH_DIR) {
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("achievement-first_quest")).toHaveClass(/unlocked/);
+  await expect(page.getByTestId("achievement-bug_hunter")).toHaveClass(/unlocked/);
+  await expect(page.getByTestId("achievement-vim_par_sniper")).toHaveClass(/unlocked/);
+  await expect(page.getByTestId("tech-card-python")).toContainText(/\d+ XP/);
+  await expect(page.getByTestId("tech-card-debugging")).toContainText(/\d+ XP/);
+  await expect(page.getByTestId("tech-card-neovim")).toContainText(/\d+ XP/);
+
+  if (shotDir) {
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
-      path: path.join(process.env.CAPTURE_WALKTHROUGH_DIR, "dashboard_with_xp.png"),
-      fullPage: true,
+      path: path.join(shotDir, "v2_dashboard_achievements.png"),
+      fullPage: false,
     });
   }
 });

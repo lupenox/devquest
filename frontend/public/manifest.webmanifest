@@ -1,0 +1,24 @@
+{
+  "name": "DevQuest — Neovim & Full-Stack RPG Learning OS",
+  "short_name": "DevQuest",
+  "description": "Neovim-first RPG learning OS with interactive zyBooks lessons, AI Training Break Sprints, RPG Skill Trees, and GitHub Repo Mock Interviews.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#041311",
+  "theme_color": "#041311",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

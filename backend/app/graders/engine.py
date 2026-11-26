@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -140,7 +141,119 @@ def grade_browser_activity(activity_type: str, spec: dict[str, Any], submission:
             output="\n".join(lines) + (f"\n{spec.get('explanation', '')}" if passed else ""),
         )
 
+    if activity_type == "pdb_sim":
+        required_list = [str(a) for a in spec.get("required_actions", [])]
+        required_set = set(required_list)
+        completed_set = {str(a) for a in submission.get("completed_actions", [])}
+        passed = required_set.issubset(completed_set)
+        matched = required_set.intersection(completed_set)
+        if passed:
+            explanation = spec.get(
+                "explanation",
+                "You stepped through the frame and inspected live debugger state!",
+            )
+            return GradeResult(True, 1.0, f"Debugger objectives complete! {explanation}".strip())
+        missing = [a for a in required_list if a not in completed_set]
+        return GradeResult(
+            False,
+            len(matched) / max(1, len(required_set)),
+            f"Completed {len(matched)}/{len(required_set)} debugger objectives. Remaining: {', '.join(missing)}.",
+        )
+
     return GradeResult(False, 0.0, f"Unsupported browser activity type: {activity_type}")
+
+
+def run_regex_playground(pattern: str, text: str) -> dict[str, Any]:
+    """Safely tests a Python regex pattern against sample text and returns match spans + capture groups."""
+    if len(pattern) > 2000:
+        return {"ok": False, "error": "Pattern exceeds 2000 characters.", "matches": []}
+    if len(text) > 50000:
+        return {"ok": False, "error": "Sample text exceeds 50000 characters.", "matches": []}
+    if pattern == "":
+        return {"ok": True, "error": None, "matches": []}
+
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        return {"ok": False, "error": str(exc), "matches": []}
+
+    index_to_name = {idx: name for name, idx in compiled.groupindex.items()}
+    matches: list[dict[str, Any]] = []
+    for m in compiled.finditer(text):
+        groups: dict[str, str] = {}
+        for idx, val in enumerate(m.groups(), start=1):
+            key = index_to_name.get(idx, str(idx))
+            groups[key] = "" if val is None else str(val)
+        matches.append(
+            {
+                "start": m.start(),
+                "end": m.end(),
+                "match": m.group(0),
+                "groups": groups,
+            }
+        )
+        if len(matches) >= 200:
+            break
+
+    return {"ok": True, "error": None, "matches": matches}
+
+
+def run_sql_playground(spec: dict[str, Any], query: str) -> dict[str, Any]:
+    """Executes a read-only SQL query against an ephemeral in-memory sqlite3 DB seeded with spec['setup_sql']."""
+    user_sql = (query or "").strip()
+    if not user_sql:
+        return {"ok": False, "error": "SQL query is empty.", "columns": [], "rows": [], "row_count": 0}
+    if len(user_sql) > 10000:
+        return {"ok": False, "error": "SQL query exceeds maximum length.", "columns": [], "rows": [], "row_count": 0}
+
+    allowed_actions = {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+    }
+    if hasattr(sqlite3, "SQLITE_RECURSIVE"):
+        allowed_actions.add(sqlite3.SQLITE_RECURSIVE)
+
+    def _read_only_authorizer(action: int, arg1: Any, arg2: Any, db_name: Any, trigger_name: Any) -> int:
+        if action in allowed_actions:
+            return sqlite3.SQLITE_OK
+        if action == sqlite3.SQLITE_PRAGMA and str(arg1 or "").lower() in {
+            "table_info",
+            "table_list",
+            "table_xinfo",
+        }:
+            return sqlite3.SQLITE_OK
+        return sqlite3.SQLITE_DENY
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        setup_sql = spec.get("setup_sql", "")
+        if setup_sql:
+            conn.executescript(setup_sql)
+        conn.set_authorizer(_read_only_authorizer)
+        deadline = time.monotonic() + 2.0
+        conn.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 1000)
+
+        cur = conn.execute(user_sql)
+        cols = [d[0] for d in (cur.description or [])]
+        rows = [list(r) for r in cur.fetchmany(500)]
+        return {
+            "ok": True,
+            "error": None,
+            "columns": cols,
+            "rows": rows,
+            "row_count": len(rows),
+        }
+    except sqlite3.Error as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+        }
+    finally:
+        conn.close()
 
 
 def materialize_workspace(

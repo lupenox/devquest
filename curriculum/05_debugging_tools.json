@@ -95,11 +95,78 @@
           }
         },
         {
+          "id": "dbg-101-pdb-sim",
+          "title": "Interactive Debugger Simulation: Step Through `buggy_total()` in `(Pdb)`",
+          "activity_type": "pdb_sim",
+          "grader_type": "browser",
+          "order_index": 3,
+          "xp_reward": 30,
+          "spec": {
+            "prompt": "`buggy_total([10, 20, 30])` returns `30` instead of `60`! Use the live `(Pdb)` prompt below: step through the loop with `n` (or `s`), inspect the accumulator with `p total`, and print the call stack with `w` to spot the bug.",
+            "code": [
+              "def buggy_total(nums):",
+              "    total = 0",
+              "    for n in nums:",
+              "        total = n",
+              "    return total",
+              "",
+              "def run_eval():",
+              "    return buggy_total([10, 20, 30])"
+            ],
+            "trace": [
+              {
+                "line": 3,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "0"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:3"]
+              },
+              {
+                "line": 4,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "0", "n": "10"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:4"]
+              },
+              {
+                "line": 3,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "10", "n": "10"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:3"]
+              },
+              {
+                "line": 4,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "10", "n": "20"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:4"]
+              },
+              {
+                "line": 3,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "20", "n": "20"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:3"]
+              },
+              {
+                "line": 4,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "20", "n": "30"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:4"]
+              },
+              {
+                "line": 5,
+                "func": "buggy_total",
+                "locals": {"nums": "[10, 20, 30]", "total": "30", "n": "30"},
+                "stack": ["<module>() at eval.py:8", "run_eval() at eval.py:8", "buggy_total(nums=[10, 20, 30]) at eval.py:5"]
+              }
+            ],
+            "required_actions": ["step", "inspect_var:total", "stack"],
+            "explanation": "Stepping with `n` and inspecting `p total` exposed that line 4 assigns `total = n` (overwriting `total` on every iteration) instead of accumulating with `total += n`. Running `w` confirmed the call path `<module> -> run_eval -> buggy_total`."
+          }
+        },
+        {
           "id": "dbg-101-nvim-lab",
           "title": "Neovim Debugging Lab: Hunt 3 Bugs in `buggy_eval.py` Using `pdb`",
           "activity_type": "nvim_lab",
           "grader_type": "debugging",
-          "order_index": 3,
+          "order_index": 4,
           "xp_reward": 75,
           "par_keystrokes": 95,
           "spec": {

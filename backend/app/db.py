@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from . import config
+from .achievements import get_rank_title, list_achievements
 from .rpg import TECHNOLOGIES, compute_mastery_pct, compute_streak, iso_now, tech_xp_to_level, xp_to_level
 
 SCHEMA_SQL = """
@@ -97,6 +98,31 @@ CREATE TABLE IF NOT EXISTS external_profiles (
 CREATE TABLE IF NOT EXISTS daily_goals (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS achievements (
+    slug TEXT PRIMARY KEY,
+    unlocked_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sprint_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    duration_minutes INTEGER NOT NULL,
+    completed_count INTEGER NOT NULL,
+    max_combo INTEGER NOT NULL,
+    bonus_xp INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mock_interviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_full_name TEXT NOT NULL,
+    module_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    readiness_score REAL NOT NULL DEFAULT 0,
+    transcript_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
 
@@ -325,7 +351,7 @@ def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
     now_iso = iso_now()
     due_reviews = conn.execute(
         """
-        SELECT s.activity_id, s.due_at, s.interval_days, a.title, a.tech_slug, a.module_id, a.activity_type
+        SELECT s.activity_id, s.due_at, s.interval_days, a.title, a.tech_slug, a.module_id, a.activity_type, a.xp_reward
         FROM srs_cards s
         JOIN activities a ON a.id = s.activity_id
         WHERE s.due_at <= ?
@@ -370,6 +396,111 @@ def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
         """
     ).fetchall()
 
+    # Build 3 smart Daily Warmup items (due SM-2 reviews -> rusty/unstarted quick drills -> general quick drills)
+    daily_warmup: list[dict[str, Any]] = []
+    warmup_seen: set[str] = set()
+    warmup_techs: set[str] = set()
+    freshness_by_tech = {t["slug"]: t["freshness"] for t in technologies}
+
+    for rev in due_reviews:
+        if len(daily_warmup) >= 2:
+            break
+        aid = str(rev["activity_id"])
+        warmup_seen.add(aid)
+        warmup_techs.add(str(rev["tech_slug"]))
+        daily_warmup.append(
+            {
+                "activity_id": aid,
+                "title": str(rev["title"]),
+                "tech_slug": str(rev["tech_slug"]),
+                "module_id": str(rev["module_id"]),
+                "activity_type": str(rev["activity_type"]),
+                "xp_reward": int(rev["xp_reward"]),
+                "reason": "Spaced-repetition review due",
+            }
+        )
+
+    quick_candidates = conn.execute(
+        """
+        SELECT a.id AS activity_id, a.title, a.tech_slug, a.module_id, a.activity_type, a.xp_reward,
+               CASE WHEN c.activity_id IS NULL THEN 0 ELSE 1 END AS is_done
+        FROM activities a
+        JOIN modules m ON m.id = a.module_id
+        LEFT JOIN completions c ON c.activity_id = a.id
+        WHERE a.activity_type IN ('read_check', 'multi_select', 'fill_blank', 'parsons', 'code_trace', 'pdb_sim')
+        ORDER BY is_done ASC, m.order_index ASC, a.order_index ASC
+        LIMIT 60
+        """
+    ).fetchall()
+
+    freshness_rank = {"rusty": 0, "warming": 1, "unstarted": 2, "fresh": 3}
+    ranked_quick = sorted(
+        quick_candidates,
+        key=lambda r: (
+            int(r["is_done"]),
+            freshness_rank.get(freshness_by_tech.get(str(r["tech_slug"]), "unstarted"), 2),
+        ),
+    )
+
+    for pass_distinct in (True, False):
+        for r in ranked_quick:
+            if len(daily_warmup) >= 3:
+                break
+            aid = str(r["activity_id"])
+            tslug = str(r["tech_slug"])
+            if aid in warmup_seen:
+                continue
+            if pass_distinct and tslug in warmup_techs:
+                continue
+            fr = freshness_by_tech.get(tslug, "unstarted")
+            reason = (
+                "Refresh rusty skill"
+                if fr == "rusty"
+                else ("Keep warming track sharp" if fr == "warming" else ("Explore new track" if fr == "unstarted" else "Quick warm-up drill"))
+            )
+            warmup_seen.add(aid)
+            warmup_techs.add(tslug)
+            daily_warmup.append(
+                {
+                    "activity_id": aid,
+                    "title": str(r["title"]),
+                    "tech_slug": tslug,
+                    "module_id": str(r["module_id"]),
+                    "activity_type": str(r["activity_type"]),
+                    "xp_reward": int(r["xp_reward"]),
+                    "reason": reason,
+                }
+            )
+
+    if len(daily_warmup) < 3:
+        fallback_rows = conn.execute(
+            """
+            SELECT a.id AS activity_id, a.title, a.tech_slug, a.module_id, a.activity_type, a.xp_reward
+            FROM activities a
+            JOIN modules m ON m.id = a.module_id
+            ORDER BY m.order_index ASC, a.order_index ASC
+            LIMIT 10
+            """
+        ).fetchall()
+        for r in fallback_rows:
+            if len(daily_warmup) >= 3:
+                break
+            aid = str(r["activity_id"])
+            if aid in warmup_seen:
+                continue
+            warmup_seen.add(aid)
+            daily_warmup.append(
+                {
+                    "activity_id": aid,
+                    "title": str(r["title"]),
+                    "tech_slug": str(r["tech_slug"]),
+                    "module_id": str(r["module_id"]),
+                    "activity_type": str(r["activity_type"]),
+                    "xp_reward": int(r["xp_reward"]),
+                    "reason": "Daily practice quest",
+                }
+            )
+
     completed_total = sum(act_done.values())
     activities_total = sum(act_totals.values())
 
@@ -378,11 +509,14 @@ def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
         "level": level,
         "xp_in_level": xp_in_level,
         "xp_for_next": xp_for_next,
+        "rank_title": get_rank_title(level),
         "streak_days": streak_days,
         "today_xp": today_xp,
         "daily_xp_target": daily_xp_target,
         "completed_activities": completed_total,
         "total_activities": activities_total,
+        "achievements": list_achievements(conn),
+        "daily_warmup": daily_warmup,
         "technologies": technologies,
         "due_reviews": [dict(r) for r in due_reviews],
         "recent_xp": [dict(r) for r in recent_xp],

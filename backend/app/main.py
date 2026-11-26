@@ -7,10 +7,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import config
+from .achievements import evaluate_achievements
 from .db import award_xp, get_conn, get_dashboard_data, init_db
 from .github_study import (
     create_repo_interview_pack,
@@ -19,7 +20,14 @@ from .github_study import (
     save_github_connection,
     sync_github_profile,
 )
-from .graders import grade_browser_activity, grade_workspace_activity, materialize_workspace
+from .graders import (
+    grade_browser_activity,
+    grade_workspace_activity,
+    materialize_workspace,
+    run_regex_playground,
+    run_sql_playground,
+)
+from .mock_interview import answer_mock_question, list_mock_interviews, start_mock_interview
 from .ollama_gen import generate_zybooks_module, list_ollama_models
 from .rpg import calculate_par_bonus, compute_mastery_pct, iso_now, sm2_next_review
 from .sync import (
@@ -29,6 +37,7 @@ from .sync import (
     sync_exercism,
     sync_leetcode,
 )
+from .terminal_launcher import launch_terminal_nvim
 
 
 class EventHub:
@@ -124,6 +133,43 @@ class GitHubAnalyzeReq(BaseModel):
     model: str | None = None
 
 
+class SprintStartReq(BaseModel):
+    duration_minutes: int = Field(default=5, ge=1, le=30)
+    tech_slug: str | None = None
+
+
+class SprintCompleteReq(BaseModel):
+    duration_minutes: int = Field(ge=1, le=60)
+    completed_count: int = Field(ge=0, le=100)
+    max_combo: int = Field(ge=0, le=100)
+    tech_slug: str | None = None
+
+
+class RegexPlaygroundReq(BaseModel):
+    pattern: str = ""
+    text: str = ""
+
+
+class SqlPlaygroundReq(BaseModel):
+    query: str = ""
+
+
+class MockInterviewStartReq(BaseModel):
+    repo: str
+    model: str | None = None
+
+
+class MockInterviewAnswerReq(BaseModel):
+    answer: str
+    model: str | None = None
+
+
+async def _broadcast_achievements(unlocked: list[dict[str, Any]]) -> None:
+    if not unlocked:
+        return
+    await hub.broadcast("achievement_unlocked", {**unlocked[0], "achievements": unlocked})
+
+
 def _record_grade_outcome(
     conn,
     act_row,
@@ -214,7 +260,9 @@ def _record_grade_outcome(
             (activity_id, reps, ef, ivl, due),
         )
 
-    # Fetch updated tech mastery
+    unlocked_achievements = evaluate_achievements(conn) if passed else []
+
+    # Fetch updated tech mastery (after any achievement bonus XP)
     tech = conn.execute("SELECT * FROM technologies WHERE slug = ?", (tech_slug,)).fetchone()
     total_a = conn.execute("SELECT COUNT(*) AS c FROM activities WHERE tech_slug = ?", (tech_slug,)).fetchone()["c"]
     done_a = conn.execute(
@@ -240,6 +288,7 @@ def _record_grade_outcome(
         "tech_xp": int(tech["xp"]),
         "tech_mastery_pct": mastery_pct,
         "freshness": freshness,
+        "unlocked_achievements": unlocked_achievements,
     }
 
 
@@ -491,6 +540,7 @@ async def submit_browser_activity(activity_id: str, req: BrowserSubmitReq):
         res = grade_browser_activity(act["activity_type"], spec, req.submission)
         outcome = _record_grade_outcome(conn, act, res.passed, res.score, res.output)
     await hub.broadcast("activity_graded", outcome)
+    await _broadcast_achievements(outcome.get("unlocked_achievements", []))
     return outcome
 
 
@@ -503,6 +553,21 @@ def launch_nvim_workspace(activity_id: str, req: LaunchNvimReq | None = None):
         act_dict = dict(act)
         act_dict["spec"] = json.loads(act_dict.pop("spec_json"))
     return materialize_workspace(act_dict, force_reset=bool(req and req.reset))
+
+
+@app.post("/api/activities/{activity_id}/open-terminal")
+def open_activity_terminal(activity_id: str, req: LaunchNvimReq | None = None):
+    with get_conn() as conn:
+        act = conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+        if not act:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        act_dict = dict(act)
+        act_dict["spec"] = json.loads(act_dict.pop("spec_json"))
+    ws = materialize_workspace(act_dict, force_reset=bool(req and req.reset))
+    try:
+        return launch_terminal_nvim(ws["workspace_dir"], ws["meta"]["primary_file"], ws["nvim_command"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/grade")
@@ -518,6 +583,7 @@ async def grade_workspace(req: GradeWorkspaceReq):
         res = grade_workspace_activity(act["grader_type"], ws_dir, spec)
         outcome = _record_grade_outcome(conn, act, res.passed, res.score, res.output, keystrokes=req.keystrokes)
     await hub.broadcast("activity_graded", outcome)
+    await _broadcast_achievements(outcome.get("unlocked_achievements", []))
     return outcome
 
 
@@ -552,8 +618,10 @@ async def run_external_sync(req: SyncRunReq | None = None):
                     results.append({"provider": prov, "ok": False, "error": "Handle not configured yet."})
             except Exception as exc:
                 results.append({"provider": prov, "ok": False, "error": str(exc)})
-    await hub.broadcast("sync_complete", {"results": results})
-    return {"results": results}
+        unlocked = evaluate_achievements(conn)
+    await hub.broadcast("sync_complete", {"results": results, "unlocked_achievements": unlocked})
+    await _broadcast_achievements(unlocked)
+    return {"results": results, "unlocked_achievements": unlocked}
 
 
 @app.post("/api/import/exercism")
@@ -649,14 +717,368 @@ async def github_analyze(req: GitHubAnalyzeReq):
             raise HTTPException(status_code=400, detail=str(exc))
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"GitHub analysis failed: {exc}")
+        unlocked = evaluate_achievements(conn)
+    res["unlocked_achievements"] = unlocked
     await hub.broadcast(
         "module_generated",
         {"module_id": res["module"]["id"], "tech_slug": res["module"]["tech_slug"]},
     )
+    await _broadcast_achievements(unlocked)
     return res
 
 
-# Serve production React build when present
-_dist_dir = config.FRONTEND_DIR / "dist"
-if _dist_dir.exists():
-    app.mount("/", StaticFiles(directory=str(_dist_dir), html=True), name="frontend")
+@app.get("/api/search")
+def search_catalog(q: str = Query(default="")):
+    needle = q.strip().lower()
+    like = f"%{needle}%"
+    with get_conn() as conn:
+        dash = get_dashboard_data(conn)
+        tech_mastery = {t["slug"]: t["mastery_pct"] for t in dash["technologies"]}
+
+        if needle:
+            tech_rows = conn.execute(
+                """
+                SELECT slug, name, category, color
+                FROM technologies
+                WHERE LOWER(slug) LIKE ? OR LOWER(name) LIKE ? OR LOWER(category) LIKE ?
+                ORDER BY name ASC
+                LIMIT 10
+                """,
+                (like, like, like),
+            ).fetchall()
+            mod_rows = conn.execute(
+                """
+                SELECT id, tech_slug, title, subtitle, kind, difficulty
+                FROM modules
+                WHERE kind != 'repo_interview'
+                  AND (LOWER(id) LIKE ? OR LOWER(title) LIKE ? OR LOWER(subtitle) LIKE ? OR LOWER(tech_slug) LIKE ? OR LOWER(content_json) LIKE ?)
+                ORDER BY
+                    CASE WHEN LOWER(title) LIKE ? OR LOWER(id) LIKE ? THEN 0 ELSE 1 END,
+                    order_index ASC
+                LIMIT 12
+                """,
+                (like, like, like, like, like, like, like),
+            ).fetchall()
+            act_rows = conn.execute(
+                """
+                SELECT id, module_id, tech_slug, title, activity_type, xp_reward
+                FROM activities
+                WHERE LOWER(id) LIKE ? OR LOWER(title) LIKE ? OR LOWER(tech_slug) LIKE ? OR LOWER(activity_type) LIKE ?
+                ORDER BY
+                    CASE WHEN LOWER(title) LIKE ? OR LOWER(id) LIKE ? THEN 0 ELSE 1 END,
+                    order_index ASC
+                LIMIT 12
+                """,
+                (like, like, like, like, like, like),
+            ).fetchall()
+            pack_rows = conn.execute(
+                """
+                SELECT id, tech_slug, title, subtitle, kind, difficulty
+                FROM modules
+                WHERE kind = 'repo_interview'
+                  AND (LOWER(id) LIKE ? OR LOWER(title) LIKE ? OR LOWER(subtitle) LIKE ? OR LOWER(tech_slug) LIKE ?)
+                ORDER BY created_at DESC
+                LIMIT 8
+                """,
+                (like, like, like, like),
+            ).fetchall()
+        else:
+            tech_rows = conn.execute(
+                "SELECT slug, name, category, color FROM technologies ORDER BY name ASC LIMIT 8"
+            ).fetchall()
+            mod_rows = conn.execute(
+                """
+                SELECT id, tech_slug, title, subtitle, kind, difficulty
+                FROM modules
+                WHERE kind != 'repo_interview'
+                ORDER BY order_index ASC
+                LIMIT 8
+                """
+            ).fetchall()
+            act_rows = conn.execute(
+                """
+                SELECT id, module_id, tech_slug, title, activity_type, xp_reward
+                FROM activities
+                ORDER BY order_index ASC
+                LIMIT 8
+                """
+            ).fetchall()
+            pack_rows = conn.execute(
+                """
+                SELECT id, tech_slug, title, subtitle, kind, difficulty
+                FROM modules
+                WHERE kind = 'repo_interview'
+                ORDER BY created_at DESC
+                LIMIT 5
+                """
+            ).fetchall()
+
+        technologies = [
+            {
+                "slug": str(r["slug"]),
+                "name": str(r["name"]),
+                "category": str(r["category"]),
+                "color": str(r["color"]),
+                "mastery_pct": tech_mastery.get(str(r["slug"]), 0.0),
+            }
+            for r in tech_rows
+        ]
+        return {
+            "query": q,
+            "technologies": technologies,
+            "modules": [dict(r) for r in mod_rows],
+            "activities": [dict(r) for r in act_rows],
+            "packs": [dict(r) for r in pack_rows],
+        }
+
+
+@app.post("/api/sprint/start")
+def sprint_start(req: SprintStartReq):
+    target_count = 2 if req.duration_minutes <= 2 else (4 if req.duration_minutes <= 5 else 6)
+    quick_types = ("read_check", "multi_select", "fill_blank", "parsons", "code_trace", "pdb_sim")
+    now_iso = iso_now()
+
+    with get_conn() as conn:
+        if req.tech_slug:
+            tech = conn.execute("SELECT slug FROM technologies WHERE slug = ?", (req.tech_slug,)).fetchone()
+            if not tech:
+                raise HTTPException(status_code=404, detail=f"Technology '{req.tech_slug}' not found")
+
+        done_map = {
+            r["activity_id"]: dict(r)
+            for r in conn.execute("SELECT * FROM completions").fetchall()
+        }
+
+        where = ["a.activity_type IN ('read_check', 'multi_select', 'fill_blank', 'parsons', 'code_trace', 'pdb_sim')"]
+        params: list[Any] = [now_iso]
+        if req.tech_slug:
+            where.append("a.tech_slug = ?")
+            params.append(req.tech_slug)
+
+        rows = conn.execute(
+            f"""
+            SELECT a.*,
+                   CASE WHEN s.due_at IS NOT NULL AND s.due_at <= ? THEN 0 ELSE 1 END AS due_rank,
+                   CASE WHEN c.activity_id IS NULL THEN 0 ELSE 1 END AS done_rank
+            FROM activities a
+            JOIN modules m ON m.id = a.module_id
+            LEFT JOIN completions c ON c.activity_id = a.id
+            LEFT JOIN srs_cards s ON s.activity_id = a.id
+            WHERE {' AND '.join(where)}
+            ORDER BY due_rank ASC, done_rank ASC, m.order_index ASC, a.order_index ASC
+            LIMIT 60
+            """,
+            params,
+        ).fetchall()
+
+        # Fallback to any activity for the requested tech if no browser drills exist
+        if not rows:
+            fallback_where = ["1 = 1"]
+            fallback_params: list[Any] = []
+            if req.tech_slug:
+                fallback_where.append("a.tech_slug = ?")
+                fallback_params.append(req.tech_slug)
+            rows = conn.execute(
+                f"""
+                SELECT a.*
+                FROM activities a
+                JOIN modules m ON m.id = a.module_id
+                WHERE {' AND '.join(fallback_where)}
+                ORDER BY m.order_index ASC, a.order_index ASC
+                LIMIT ?
+                """,
+                [*fallback_params, target_count],
+            ).fetchall()
+
+        chosen_rows: list[Any] = []
+        seen_ids: set[str] = set()
+        if not req.tech_slug:
+            seen_techs: set[str] = set()
+            for r in rows:
+                if len(chosen_rows) >= target_count:
+                    break
+                if r["tech_slug"] not in seen_techs:
+                    seen_techs.add(r["tech_slug"])
+                    seen_ids.add(r["id"])
+                    chosen_rows.append(r)
+
+        for r in rows:
+            if len(chosen_rows) >= target_count:
+                break
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                chosen_rows.append(r)
+
+        activities: list[dict[str, Any]] = []
+        for a in chosen_rows:
+            ad = {
+                "id": a["id"],
+                "module_id": a["module_id"],
+                "tech_slug": a["tech_slug"],
+                "title": a["title"],
+                "activity_type": a["activity_type"],
+                "grader_type": a["grader_type"],
+                "order_index": a["order_index"],
+                "xp_reward": a["xp_reward"],
+                "par_keystrokes": a["par_keystrokes"],
+                "spec": json.loads(a["spec_json"]),
+            }
+            comp = done_map.get(a["id"])
+            ad["completed"] = comp is not None
+            ad["completion"] = comp
+            activities.append(ad)
+
+        return {
+            "duration_minutes": req.duration_minutes,
+            "activities": activities,
+        }
+
+
+@app.post("/api/sprint/complete")
+async def sprint_complete(req: SprintCompleteReq):
+    if req.completed_count <= 0:
+        bonus_xp = 0
+    else:
+        if req.max_combo <= 1:
+            mult = 1.0
+        elif req.max_combo == 2:
+            mult = 1.5
+        elif req.max_combo == 3:
+            mult = 2.0
+        else:
+            mult = 3.0
+        bonus_xp = int(round(req.completed_count * 10 * mult))
+
+    now = iso_now()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO sprint_sessions (duration_minutes, completed_count, max_combo, bonus_xp, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (req.duration_minutes, req.completed_count, req.max_combo, bonus_xp, now),
+        )
+        session_id = int(cur.lastrowid)
+
+        if bonus_xp > 0:
+            target_tech = None
+            if req.tech_slug:
+                row = conn.execute("SELECT slug FROM technologies WHERE slug = ?", (req.tech_slug,)).fetchone()
+                if row:
+                    target_tech = str(row["slug"])
+            if not target_tech:
+                recent = conn.execute("SELECT tech_slug FROM xp_ledger ORDER BY id DESC LIMIT 1").fetchone()
+                target_tech = str(recent["tech_slug"]) if recent else "python"
+            award_xp(
+                conn,
+                target_tech,
+                bonus_xp,
+                "sprint",
+                f"AI Break Sprint ({req.duration_minutes}m, {req.completed_count} drills, {req.max_combo}x combo)",
+            )
+
+        unlocked = evaluate_achievements(conn)
+
+    payload = {
+        "session_id": session_id,
+        "duration_minutes": req.duration_minutes,
+        "completed_count": req.completed_count,
+        "max_combo": req.max_combo,
+        "bonus_xp": bonus_xp,
+        "unlocked_achievements": unlocked,
+    }
+    await hub.broadcast("sprint_completed", payload)
+    await _broadcast_achievements(unlocked)
+    return payload
+
+
+@app.post("/api/playground/regex")
+def playground_regex(req: RegexPlaygroundReq):
+    return run_regex_playground(req.pattern, req.text)
+
+
+@app.post("/api/playground/sql/{activity_id}")
+def playground_sql(activity_id: str, req: SqlPlaygroundReq):
+    with get_conn() as conn:
+        act = conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+        if not act:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        spec = json.loads(act["spec_json"])
+    return run_sql_playground(spec, req.query)
+
+
+@app.get("/api/interviews")
+def get_interviews():
+    with get_conn() as conn:
+        return {"interviews": list_mock_interviews(conn)}
+
+
+@app.post("/api/interviews/start")
+def interview_start(req: MockInterviewStartReq):
+    with get_conn() as conn:
+        try:
+            return start_mock_interview(conn, req.repo, model=req.model)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Failed to start mock interview: {exc}")
+
+
+@app.post("/api/interviews/{session_id}/answer")
+async def interview_answer(session_id: int, req: MockInterviewAnswerReq):
+    with get_conn() as conn:
+        try:
+            res = answer_mock_question(conn, session_id, req.answer, model=req.model)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    if res.get("completed"):
+        await hub.broadcast(
+            "interview_completed",
+            {
+                "session_id": res["session_id"],
+                "repo_full_name": res["repo_full_name"],
+                "readiness_score": res["readiness_score"],
+                "xp_awarded": res["xp_awarded"],
+            },
+        )
+    await _broadcast_achievements(res.get("unlocked_achievements", []))
+    return res
+
+
+def _serve_spa_or_static(full_path: str) -> FileResponse:
+    norm = full_path.lstrip("/")
+    if norm == "api" or norm.startswith("api/") or norm == "ws" or norm.startswith("ws/"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    dist_dir = (config.FRONTEND_DIR / "dist").resolve()
+    if not dist_dir.exists():
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+
+    if norm:
+        candidate = (dist_dir / norm).resolve()
+        if candidate.is_relative_to(dist_dir) and candidate.is_file():
+            media_type = None
+            if candidate.suffix == ".webmanifest":
+                media_type = "application/manifest+json"
+            elif candidate.name == "sw.js":
+                media_type = "application/javascript"
+            return FileResponse(candidate, media_type=media_type)
+        if norm.startswith("assets/"):
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+    index_file = dist_dir / "index.html"
+    if not index_file.exists():
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+    return FileResponse(index_file, media_type="text/html")
+
+
+@app.get("/", include_in_schema=False)
+def spa_root():
+    return _serve_spa_or_static("")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_fallback(full_path: str):
+    return _serve_spa_or_static(full_path)

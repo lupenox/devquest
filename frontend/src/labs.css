@@ -1,0 +1,934 @@
+/* DevQuest v2.0 — Interactive Labs, Playgrounds, SVG Skill Tree & Mock Interviewer Styles */
+
+/* ── Shared Helpers ──────────────────────────────────────────────────────── */
+.btn-konsole {
+  background: linear-gradient(135deg, var(--accent-2, #bb9af7), var(--accent, #7aa2f7));
+  border-color: transparent;
+  color: #090d16;
+  font-weight: 700;
+}
+
+.btn-konsole:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: linear-gradient(135deg, var(--accent-2, #bb9af7), var(--accent, #7aa2f7));
+}
+
+.lab-launch-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 13px;
+  border-radius: 9px;
+  margin-bottom: 10px;
+  font-size: 0.84rem;
+}
+
+.lab-launch-banner.launched {
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: var(--green, #73daca);
+}
+
+.lab-launch-banner.fallback {
+  background: rgba(224, 175, 104, 0.14);
+  border: 1px solid rgba(224, 175, 104, 0.4);
+  color: var(--amber, #e0af68);
+}
+
+/* ── PdbSim Interactive Debugger ─────────────────────────────────────────── */
+.pdb-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pdb-objectives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pdb-obj {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.pdb-obj.done {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #86efac;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.18);
+}
+
+.pdb-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr);
+  gap: 12px;
+}
+
+.pdb-panel {
+  background: var(--bg-code, #0b0f17);
+  color: var(--code-text, #e6edf7);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdb-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9fb3cc;
+}
+
+.pdb-code-body {
+  padding: 8px 0;
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  overflow-x: auto;
+}
+
+.pdb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease;
+}
+
+.pdb-line.active {
+  background: rgba(122, 162, 247, 0.24);
+  border-left-color: var(--accent, #7aa2f7);
+}
+
+.pdb-pointer {
+  width: 18px;
+  font-weight: 800;
+  color: #73daca;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.pdb-bp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 0;
+}
+
+.pdb-line:hover .pdb-bp-dot {
+  border-color: rgba(247, 118, 142, 0.55);
+}
+
+.pdb-bp-dot.set {
+  background: #f7768e;
+  box-shadow: 0 0 6px #f7768e;
+}
+
+.pdb-lineno {
+  width: 24px;
+  text-align: right;
+  color: #7f91ad;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.pdb-code-text {
+  white-space: pre;
+  color: var(--code-text, #e6edf7);
+}
+
+.pdb-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdb-watch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.pdb-watch-table th,
+.pdb-watch-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(147, 163, 190, 0.14);
+}
+
+.pdb-watch-table th {
+  color: #9fb3cc;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.pdb-watch-table tr.changed {
+  background: rgba(224, 175, 104, 0.18);
+}
+
+.pdb-var-name {
+  color: #7dcfff;
+  font-weight: 600;
+}
+
+.pdb-var-val {
+  color: #73daca;
+  word-break: break-word;
+}
+
+.pdb-stack-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.pdb-stack-item {
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #9fb3cc;
+  background: rgba(147, 163, 190, 0.08);
+}
+
+.pdb-stack-item.top {
+  background: rgba(122, 162, 247, 0.2);
+  color: #f1f5f9;
+  border-left: 2px solid var(--accent, #7aa2f7);
+  font-weight: 600;
+}
+
+.pdb-console-log {
+  padding: 10px 12px;
+  max-height: 175px;
+  overflow-y: auto;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdb-log-entry {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pdb-log-cmd {
+  color: #7aa2f7;
+  font-weight: 700;
+}
+
+.pdb-log-out {
+  color: var(--code-text, #e6edf7);
+  opacity: 0.94;
+}
+
+.pdb-log-out.ok {
+  color: #73daca;
+}
+
+.pdb-log-out.err {
+  color: #f7768e;
+}
+
+.pdb-prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.pdb-prompt-prefix {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 800;
+  font-size: 0.84rem;
+  color: #bb9af7;
+  flex-shrink: 0;
+}
+
+.pdb-prompt-input {
+  flex: 1;
+  background: var(--bg-code, #0b0f17);
+  border: 1px solid var(--border);
+  color: var(--code-text, #e6edf7);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.pdb-prompt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.pdb-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-top: 1px solid rgba(147, 163, 190, 0.14);
+  background: rgba(11, 15, 23, 0.65);
+}
+
+.pdb-chip {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(147, 163, 190, 0.28);
+  background: rgba(21, 27, 41, 0.88);
+  color: #7dcfff;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.pdb-chip:hover {
+  border-color: var(--accent);
+  background: rgba(122, 162, 247, 0.24);
+  color: #ffffff;
+}
+
+.pdb-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Live Quick Playgrounds (Regex / SQL / HTML-CSS) ─────────────────────── */
+.playground-box {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.playground-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.86rem;
+  text-align: left;
+}
+
+.playground-toggle:hover {
+  background: rgba(122, 162, 247, 0.08);
+}
+
+.playground-body {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pg-textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  background: var(--bg-code, #0b0f17);
+  border: 1px solid var(--border);
+  color: var(--code-text, #e6edf7);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.pg-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.regex-highlight-box {
+  background: var(--bg-code, #0b0f17);
+  color: var(--code-text, #e6edf7);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.regex-match {
+  background: rgba(115, 218, 202, 0.3);
+  color: #ffffff;
+  border-bottom: 2px solid #73daca;
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.pg-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-code, #0b0f17);
+  color: var(--code-text, #e6edf7);
+}
+
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.pg-table th,
+.pg-table td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(147, 163, 190, 0.15);
+}
+
+.pg-table th {
+  background: rgba(15, 23, 42, 0.72);
+  color: #7dcfff;
+  font-weight: 700;
+}
+
+.pg-table tr:last-child td {
+  border-bottom: none;
+}
+
+.html-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.html-preview-frame {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* ── Interactive Layered SVG + Node RPG Skill Tree ───────────────────────── */
+.st-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.st-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.st-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-swatch {
+  width: 22px;
+  height: 3px;
+  border-radius: 99px;
+  display: inline-block;
+}
+
+.st-swatch.completed {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.75);
+}
+
+.st-swatch.unlocked {
+  background: var(--accent, #7aa2f7);
+}
+
+.st-swatch.locked {
+  border-top: 2px dashed var(--text-muted, #93a3be);
+  background: transparent;
+  height: 0;
+}
+
+.st-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.st-filter-pill {
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.st-filter-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.st-filter-pill.active {
+  background: rgba(122, 162, 247, 0.22);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.st-canvas-scroll {
+  overflow-x: auto;
+  padding: 6px 2px 12px;
+}
+
+.st-stage {
+  position: relative;
+  min-width: 820px;
+  padding: 8px 4px;
+}
+
+.st-svg-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+.st-edge {
+  fill: none;
+  transition: opacity 0.18s ease, stroke-width 0.18s ease;
+}
+
+.st-edge-completed {
+  stroke: #22c55e;
+  stroke-width: 2.8;
+  filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.65));
+}
+
+.st-edge-unlocked {
+  stroke: var(--accent, #7aa2f7);
+  stroke-width: 2.3;
+  opacity: 0.85;
+}
+
+.st-edge-locked {
+  stroke: var(--text-muted, #93a3be);
+  stroke-width: 1.8;
+  stroke-dasharray: 6 5;
+  opacity: 0.45;
+}
+
+.st-edge-dim {
+  opacity: 0.14;
+}
+
+.st-edge-highlight {
+  stroke-width: 3.4;
+  opacity: 1;
+}
+
+.st-columns {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 56px;
+  align-items: start;
+}
+
+.st-tier-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 245px;
+}
+
+.st-tier-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.st-node {
+  position: relative;
+  background: var(--bg-elev);
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  text-align: left;
+  color: var(--text);
+}
+
+.st-node:hover,
+.st-node:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+  outline: none;
+}
+
+.st-node.completed {
+  border-color: rgba(34, 197, 94, 0.78);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.13), var(--bg-elev));
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.16);
+}
+
+.st-node.locked {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.st-node.chain-highlight {
+  border-color: var(--cyan, #7dcfff);
+  box-shadow: 0 0 0 2px rgba(125, 207, 255, 0.28);
+}
+
+.st-node-progress {
+  height: 5px;
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.st-node-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+/* ── Conversational Staff-Engineer Mock Interviewer ──────────────────────── */
+.repo-card-item {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+
+.repo-card-item:hover {
+  border-color: var(--accent);
+}
+
+.mock-panel {
+  background: var(--bg-card);
+  border: 1.5px solid var(--accent-2, #bb9af7);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.26);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mock-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mock-question-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent-2, #bb9af7);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.mock-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(122, 162, 247, 0.11);
+  border: 1px solid rgba(122, 162, 247, 0.26);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.mock-answer-textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.mock-answer-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.mock-rubric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.mock-rubric-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+
+.mock-rubric-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.mock-rubric-track {
+  width: 100%;
+  height: 7px;
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.mock-rubric-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+
+.mock-feedback-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mock-ideal-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mock-summary-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(122, 162, 247, 0.16), rgba(115, 218, 202, 0.14));
+  border: 1px solid rgba(115, 218, 202, 0.45);
+}
+
+.mock-score-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--bg-code, #0b0f17);
+  color: #ecfdf5;
+  border: 3px solid var(--green-solid, #22c55e);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.readiness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.readiness-high {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.42);
+}
+
+.readiness-mid {
+  background: rgba(224, 175, 104, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(224, 175, 104, 0.42);
+}
+
+.readiness-low {
+  background: rgba(247, 118, 142, 0.2);
+  color: #fb7185;
+  border: 1px solid rgba(247, 118, 142, 0.42);
+}
+
+.repo-interview-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(187, 154, 247, 0.16), rgba(122, 162, 247, 0.14));
+  border: 1px solid rgba(187, 154, 247, 0.45);
+}
+
+/* ── Emerald 3D Glass & Frutiger Aero Theme Harmonization ────────────────── */
+[data-theme="emerald-3d"] .st-node,
+[data-theme="emerald-3d"] .mock-panel,
+[data-theme="emerald-3d"] .repo-card-item {
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="frutiger-aero"] .pdb-obj.done {
+  background: rgba(22, 163, 74, 0.16);
+  color: #14532d;
+  border-color: rgba(22, 163, 74, 0.55);
+}
+
+[data-theme="frutiger-aero"] .readiness-high {
+  color: #14532d;
+  background: rgba(34, 197, 94, 0.22);
+}
+
+[data-theme="frutiger-aero"] .readiness-mid {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.22);
+}
+
+[data-theme="frutiger-aero"] .readiness-low {
+  color: #9f1239;
+  background: rgba(244, 63, 94, 0.18);
+}
+
+[data-theme="frutiger-aero"] .lab-launch-banner.launched {
+  color: #14532d;
+}
+
+[data-theme="frutiger-aero"] .lab-launch-banner.fallback {
+  color: #92400e;
+}
+
+[data-theme="frutiger-aero"] .st-node,
+[data-theme="frutiger-aero"] .mock-panel,
+[data-theme="frutiger-aero"] .repo-card-item {
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 22px rgba(14, 116, 144, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-node,
+  .st-edge,
+  .pdb-obj,
+  .repo-card-item {
+    transition: none;
+  }
+  .st-node:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .pdb-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .st-columns {
+    gap: 32px;
+  }
+}

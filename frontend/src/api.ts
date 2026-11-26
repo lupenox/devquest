@@ -1,13 +1,22 @@
 import type {
+  Activity,
   DashboardData,
   GitHubRepo,
   GitHubStatus,
   GradeOutcome,
   LaunchWorkspaceResp,
+  MockInterviewAnswerResp,
+  MockInterviewStartResp,
+  MockInterviewSummary,
   ModuleDetail,
   ModuleSummary,
   OllamaModel,
+  OpenTerminalResp,
+  RegexPlaygroundResp,
+  SearchResults,
   SkillTreeNode,
+  SprintCompleteResp,
+  SqlPlaygroundResp,
   Technology,
 } from "./types";
 
@@ -29,6 +38,7 @@ export const api = {
   module: (id: string) => req<ModuleDetail>(`/api/modules/${encodeURIComponent(id)}`),
   projects: () => req<{ projects: ModuleDetail[] }>("/api/projects"),
   skillTree: () => req<{ nodes: SkillTreeNode[]; edges: { from: string; to: string }[] }>("/api/skill-tree"),
+  search: (q: string) => req<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`),
   submitBrowser: (activityId: string, submission: Record<string, any>) =>
     req<GradeOutcome>(`/api/activities/${encodeURIComponent(activityId)}/submit`, {
       method: "POST",
@@ -39,10 +49,53 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ reset }),
     }),
+  openTerminal: (activityId: string, reset = false) =>
+    req<OpenTerminalResp>(`/api/activities/${encodeURIComponent(activityId)}/open-terminal`, {
+      method: "POST",
+      body: JSON.stringify({ reset }),
+    }),
   gradeWorkspace: (activityId: string, workspaceDir: string, keystrokes?: number) =>
     req<GradeOutcome>("/api/grade", {
       method: "POST",
       body: JSON.stringify({ activity_id: activityId, workspace_dir: workspaceDir, keystrokes }),
+    }),
+  sprintStart: (durationMinutes: number, techSlug?: string | null) =>
+    req<{ duration_minutes: number; activities: Activity[] }>("/api/sprint/start", {
+      method: "POST",
+      body: JSON.stringify({
+        duration_minutes: durationMinutes,
+        tech_slug: techSlug || null,
+      }),
+    }),
+  sprintComplete: (durationMinutes: number, completedCount: number, maxCombo: number) =>
+    req<SprintCompleteResp>("/api/sprint/complete", {
+      method: "POST",
+      body: JSON.stringify({
+        duration_minutes: durationMinutes,
+        completed_count: completedCount,
+        max_combo: maxCombo,
+      }),
+    }),
+  playgroundRegex: (pattern: string, text: string) =>
+    req<RegexPlaygroundResp>("/api/playground/regex", {
+      method: "POST",
+      body: JSON.stringify({ pattern, text }),
+    }),
+  playgroundSql: (activityId: string, query: string) =>
+    req<SqlPlaygroundResp>(`/api/playground/sql/${encodeURIComponent(activityId)}`, {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
+  interviews: () => req<{ interviews: MockInterviewSummary[] }>("/api/interviews"),
+  interviewStart: (repo: string, model?: string) =>
+    req<MockInterviewStartResp>("/api/interviews/start", {
+      method: "POST",
+      body: JSON.stringify({ repo, model: model || null }),
+    }),
+  interviewAnswer: (sessionId: number, answer: string, model?: string) =>
+    req<MockInterviewAnswerResp>(`/api/interviews/${encodeURIComponent(String(sessionId))}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer, model: model || null }),
     }),
   saveProfile: (provider: string, handle: string) =>
     req<{ provider: string; handle: string }>("/api/sync/profile", {

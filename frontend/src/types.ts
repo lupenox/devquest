@@ -1,3 +1,11 @@
+export type ThemeId =
+  | "emerald-3d"
+  | "frutiger-aero"
+  | "tokyo-night"
+  | "catppuccin"
+  | "gruvbox"
+  | "kanagawa";
+
 export interface Technology {
   slug: string;
   name: string;
@@ -33,7 +41,7 @@ export interface ModuleSummary {
   title: string;
   subtitle: string;
   difficulty: string;
-  kind: "zybooks" | "kata" | "project" | "neovim_drill" | string;
+  kind: "zybooks" | "kata" | "project" | "neovim_drill" | "repo_interview" | string;
   estimated_minutes: number;
   order_index: number;
   prereq_module_id: string | null;
@@ -54,6 +62,7 @@ export interface Activity {
     | "fill_blank"
     | "parsons"
     | "code_trace"
+    | "pdb_sim"
     | "nvim_lab"
     | "boss_checkpoint";
   grader_type: string;
@@ -75,6 +84,34 @@ export interface ModuleDetail extends ModuleSummary {
   activities: Activity[];
 }
 
+export interface UnlockedAchievement {
+  slug: string;
+  name: string;
+  icon: string;
+  bonus_xp: number;
+  description?: string;
+}
+
+export interface AchievementItem {
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  bonus_xp?: number;
+  unlocked: boolean;
+  unlocked_at: string | null;
+}
+
+export interface DailyWarmupItem {
+  activity_id: string;
+  title: string;
+  tech_slug: string;
+  module_id: string;
+  activity_type: string;
+  xp_reward: number;
+  reason: string;
+}
+
 export interface GradeOutcome {
   activity_id: string;
   tech_slug: string;
@@ -88,6 +125,7 @@ export interface GradeOutcome {
   tech_xp: number;
   tech_mastery_pct: number;
   freshness: string;
+  unlocked_achievements?: UnlockedAchievement[];
 }
 
 export interface LaunchWorkspaceResp {
@@ -95,6 +133,15 @@ export interface LaunchWorkspaceResp {
   primary_file: string;
   nvim_command: string;
   meta: Record<string, any>;
+}
+
+export interface OpenTerminalResp {
+  launched: boolean;
+  terminal: string | null;
+  workspace_dir: string;
+  primary_file: string;
+  nvim_command: string;
+  message: string;
 }
 
 export interface ExternalProfile {
@@ -115,6 +162,9 @@ export interface DashboardData {
   daily_xp_target: number;
   completed_activities: number;
   total_activities: number;
+  rank_title?: string;
+  achievements?: AchievementItem[];
+  daily_warmup?: DailyWarmupItem[];
   technologies: Technology[];
   due_reviews: {
     activity_id: string;
@@ -194,4 +244,131 @@ export interface GitHubRepo {
   default_branch: string;
   html_url: string;
   topics: string[];
+}
+
+export interface SearchTechnologyHit {
+  slug: string;
+  name: string;
+  category: string;
+  color: string;
+  mastery_pct?: number;
+}
+
+export interface SearchModuleHit {
+  id: string;
+  tech_slug: string;
+  title: string;
+  subtitle?: string;
+  kind: string;
+  difficulty?: string;
+}
+
+export interface SearchActivityHit {
+  id: string;
+  module_id: string;
+  tech_slug: string;
+  title: string;
+  activity_type: string;
+  xp_reward?: number;
+}
+
+export interface SearchResults {
+  query?: string;
+  technologies: SearchTechnologyHit[];
+  modules: SearchModuleHit[];
+  activities: SearchActivityHit[];
+  packs: SearchModuleHit[];
+}
+
+export interface SprintStartResp {
+  duration_minutes: number;
+  activities: Activity[];
+}
+
+export interface SprintCompleteResp {
+  bonus_xp: number;
+  unlocked_achievements: UnlockedAchievement[];
+  session_id?: number;
+  duration_minutes?: number;
+  completed_count?: number;
+  max_combo?: number;
+}
+
+export interface RegexMatch {
+  start: number;
+  end: number;
+  match: string;
+  groups: Record<string, string>;
+}
+
+export interface RegexPlaygroundResp {
+  ok: boolean;
+  error: string | null;
+  matches: RegexMatch[];
+}
+
+export interface SqlPlaygroundResp {
+  ok: boolean;
+  error: string | null;
+  columns: string[];
+  rows: any[][];
+  row_count?: number;
+}
+
+export interface MockInterviewQuestion {
+  index: number;
+  category?: string;
+  question: string;
+  context_hint?: string;
+  focus?: string;
+}
+
+export interface MockInterviewRubric {
+  clarity: number;
+  accuracy: number;
+  code_refs: number;
+  tradeoffs: number;
+  total: number;
+  feedback: string;
+  ideal_points: string[];
+  graded_by?: string;
+}
+
+export interface MockInterviewSummary {
+  id: number;
+  repo_full_name: string;
+  module_id: string | null;
+  status: "active" | "completed" | string;
+  readiness_score: number;
+  created_at: string;
+  updated_at: string;
+  answered_count?: number;
+  total_questions?: number;
+}
+
+export interface MockInterviewStartResp {
+  session_id: number;
+  repo_full_name: string;
+  module_id?: string | null;
+  status?: string;
+  current_index: number;
+  total_questions: number;
+  question: MockInterviewQuestion;
+  questions?: MockInterviewQuestion[];
+  readiness_score?: number;
+}
+
+export interface MockInterviewAnswerResp {
+  session_id: number;
+  repo_full_name?: string;
+  status: "active" | "completed" | string;
+  answered_index: number;
+  current_index: number;
+  total_questions: number;
+  rubric: MockInterviewRubric;
+  next_question: MockInterviewQuestion | null;
+  completed: boolean;
+  readiness_score: number;
+  xp_awarded?: number;
+  unlocked_achievements?: UnlockedAchievement[];
 }

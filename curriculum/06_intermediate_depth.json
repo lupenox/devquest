@@ -97,8 +97,8 @@
       "difficulty": "intermediate",
       "kind": "zybooks",
       "estimated_minutes": 8,
-      "order_index": 3,
-      "prereq_module_id": "python-comprehensions-101",
+      "order_index": 11,
+      "prereq_module_id": "py-10-iterators-itertools",
       "summary": "Write metadata-preserving decorators, guarantee teardown with `@contextmanager` + `try/finally`, and fan out concurrent I/O with `asyncio.gather`.",
       "tags": ["python", "decorators", "asyncio", "context-managers", "zybooks"],
       "external_resources": [

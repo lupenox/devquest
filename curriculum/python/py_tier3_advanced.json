@@ -1,0 +1,476 @@
+{
+  "modules": [
+    {
+      "id": "py-13-async-deep-dive",
+      "tech_slug": "python",
+      "title": "Asyncio Deep Dive: Tasks, Semaphores, Queues & Timeouts",
+      "subtitle": "Master structured concurrency, rate limiting, producer-consumer queues, and strict timeouts on the event loop.",
+      "difficulty": "advanced",
+      "kind": "zybooks",
+      "estimated_minutes": 10,
+      "order_index": 13,
+      "prereq_module_id": "python-async-decorators-201",
+      "summary": "Coordinate concurrent coroutines with `asyncio.create_task` and `TaskGroup`, bound concurrency using `asyncio.Semaphore`, decouple work via `asyncio.Queue`, guard slow I/O with `asyncio.wait_for`, and keep the event loop non-blocking.",
+      "tags": ["python", "asyncio", "concurrency", "semaphores", "zybooks"],
+      "external_resources": [
+        {"label": "Python asyncio Tasks & TaskGroup", "url": "https://docs.python.org/3/library/asyncio-task.html"},
+        {"label": "Python asyncio Queues & Semaphores", "url": "https://docs.python.org/3/library/asyncio-queue.html"}
+      ],
+      "sections": [
+        {
+          "title": "13.1 `create_task`, `TaskGroup` & Never Blocking the Event Loop",
+          "body": "Awaiting coroutines one-by-one runs them sequentially. Calling `asyncio.create_task(coro())` schedules a coroutine immediately on the running event loop. In Python 3.11+, `async with asyncio.TaskGroup() as tg:` provides **structured concurrency**: all spawned tasks are awaited automatically before leaving the block, and if any task raises an error, sibling tasks are cancelled cleanly. Never call blocking operations like `time.sleep()` or synchronous HTTP clients directly inside an `async def` function—they freeze the entire single-threaded event loop; use async libraries or `await asyncio.to_thread(blocking_fn, ...)` instead.",
+          "code_example": "import asyncio\n\nasync def fetch_item(item_id: str) -> str:\n    await asyncio.sleep(0.05)  # yields control back to the event loop\n    return f'ok:{item_id}'\n\nasync def run_batch(ids: list[str]) -> list[str]:\n    async with asyncio.TaskGroup() as tg:\n        tasks = [tg.create_task(fetch_item(i)) for i in ids]\n    return [t.result() for t in tasks]"
+        },
+        {
+          "title": "13.2 Rate-Limiting with `asyncio.Semaphore` & Guarding with `asyncio.wait_for`",
+          "body": "Unbounded concurrency can overwhelm APIs, databases, or file descriptors. Wrapping the critical I/O section in `async with asyncio.Semaphore(limit):` ensures at most `limit` coroutines execute inside the gate concurrently while others yield cooperatively. Pair this with `await asyncio.wait_for(coro, timeout=seconds)` to cancel slow operations automatically and catch `TimeoutError` cleanly.",
+          "code_example": "import asyncio\n\nasync def bounded_call(sem: asyncio.Semaphore, coro_fn, timeout: float):\n    async with sem:\n        try:\n            return await asyncio.wait_for(coro_fn(), timeout=timeout)\n        except TimeoutError:\n            return None"
+        },
+        {
+          "title": "13.3 Producer-Consumer Pipelines with `asyncio.Queue`",
+          "body": "`asyncio.Queue(maxsize=...)` decouples producers (`await queue.put(item)`) from a fixed pool of worker tasks (`item = await queue.get()`). Every worker should wrap its processing in `try ... finally: queue.task_done()` so `await queue.join()` reliably unblocks once every enqueued item finishes—even if a worker encounters an error.",
+          "code_example": "import asyncio\n\nasync def worker(q: asyncio.Queue[int], out: dict[int, int]) -> None:\n    while True:\n        item = await q.get()\n        try:\n            await asyncio.sleep(0.01)\n            out[item] = item * item\n        finally:\n            q.task_done()"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-13-read-check",
+          "title": "Participation Activity: Blocking Calls Inside an Event Loop",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "Suppose 50 concurrent coroutines are running on an `asyncio` event loop, and one coroutine executes `time.sleep(2)` instead of `await asyncio.sleep(2)`. What happens?",
+            "options": [
+              "Only that single coroutine pauses while the other 49 continue smoothly",
+              "Python automatically moves `time.sleep(2)` to a background thread pool",
+              "The entire event loop thread blocks for 2 seconds, stalling all 49 other coroutines",
+              "`asyncio` raises a `BlockingIOError` immediately at call time"
+            ],
+            "correct_index": 2,
+            "explanation": "`asyncio` runs on a single OS thread with cooperative multitasking. Synchronous `time.sleep(2)` never yields to the event loop, freezing every task until it returns. Use `await asyncio.sleep(2)` or `await asyncio.to_thread(...)` for blocking calls.",
+            "hint": "Remember that `asyncio` only switches tasks at `await` suspension points."
+          }
+        },
+        {
+          "id": "py-13-code-trace",
+          "title": "Participation Activity: Trace Concurrent `TaskGroup` Interleaving",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 30,
+          "spec": {
+            "prompt": "Trace the exact order of events appended to `log` when `work('A', 0.05)` and `work('B', 0.01)` run inside a `TaskGroup`.",
+            "code": [
+              "log = []",
+              "async def work(name, delay):",
+              "    log.append(f'start:{name}')",
+              "    await asyncio.sleep(delay)",
+              "    log.append(f'end:{name}')",
+              "async def main():",
+              "    async with asyncio.TaskGroup() as tg:",
+              "        tg.create_task(work('A', 0.05))",
+              "        tg.create_task(work('B', 0.01))",
+              "asyncio.run(main())"
+            ],
+            "steps": [
+              {"line": 8, "note": "Task A and Task B are scheduled on the loop; neither has started until `TaskGroup` yields at block exit."},
+              {"line": 3, "note": "Task A runs first -> appends 'start:A', then yields at `await asyncio.sleep(0.05)`."},
+              {"line": 3, "note": "Event loop switches to Task B -> appends 'start:B', then yields at `await asyncio.sleep(0.01)`."},
+              {"line": 5, "note": "B wakes after 0.01s -> appends 'end:B'; later A wakes after 0.05s -> appends 'end:A'."}
+            ],
+            "checkpoints": [
+              {
+                "id": "first",
+                "line": 3,
+                "label": "`log[0]` (1st entry)",
+                "expected": "start:A",
+                "accepted": ["start:A", "'start:A'", "\"start:A\""]
+              },
+              {
+                "id": "second",
+                "line": 3,
+                "label": "`log[1]` (2nd entry)",
+                "expected": "start:B",
+                "accepted": ["start:B", "'start:B'", "\"start:B\""]
+              },
+              {
+                "id": "third",
+                "line": 5,
+                "label": "`log[2]` (3rd entry)",
+                "expected": "end:B",
+                "accepted": ["end:B", "'end:B'", "\"end:B\""]
+              },
+              {
+                "id": "fourth",
+                "line": 5,
+                "label": "`log[3]` (4th entry)",
+                "expected": "end:A",
+                "accepted": ["end:A", "'end:A'", "\"end:A\""]
+              }
+            ],
+            "explanation": "Tasks start in creation order (`start:A`, `start:B`), cooperatively suspend at `await asyncio.sleep(...)`, and complete in shortest-delay order (`end:B`, `end:A`)."
+          }
+        },
+        {
+          "id": "py-13-parsons",
+          "title": "Participation Activity: Assemble a Semaphore + Timeout Guard",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 30,
+          "spec": {
+            "prompt": "Order these lines to build `guarded_fetch(sem, fn, timeout)` that acquires the semaphore, enforces a timeout via `asyncio.wait_for`, and returns `None` on `TimeoutError`.",
+            "lines": [
+              "        except TimeoutError:",
+              "    async with sem:",
+              "            return await asyncio.wait_for(fn(), timeout=timeout)",
+              "async def guarded_fetch(sem, fn, timeout):",
+              "            return None",
+              "        try:"
+            ],
+            "correct_order": [3, 1, 5, 2, 0, 4],
+            "valid_orders": [
+              [3, 1, 5, 2, 0, 4]
+            ],
+            "explanation": "Enter `async with sem:`, wrap `await asyncio.wait_for(fn(), timeout=timeout)` in `try:`, and catch `TimeoutError` to return `None` while automatically releasing the semaphore."
+          }
+        },
+        {
+          "id": "py-13-nvim-lab",
+          "title": "Neovim Lab: Semaphore Rate Limiter, Timeout Guard & Async Queue Pool",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 85,
+          "par_keystrokes": 155,
+          "spec": {
+            "primary_file": "async_lab.py",
+            "instructions": "Implement three async utilities in `async_lab.py`:\n1. `async def run_rate_limited(factories: list[Callable[[], Awaitable[Any]]], max_concurrency: int) -> list[Any]`: raise `ValueError` if `max_concurrency < 1`; run all zero-arg coroutine factories concurrently with `asyncio.Semaphore(max_concurrency)` so at most `max_concurrency` run simultaneously, and return results in exact input order.\n2. `async def fetch_with_timeout(coro_factory: Callable[[], Awaitable[Any]], timeout: float, default: Any = None) -> Any`: await `asyncio.wait_for(coro_factory(), timeout=timeout)` and return `default` if `TimeoutError` occurs.\n3. `async def process_queue(items: list[Any], worker_fn: Callable[[Any], Awaitable[Any]], num_workers: int) -> dict[Any, Any]`: raise `ValueError` if `num_workers < 1`; push all `items` into an `asyncio.Queue`, run `num_workers` concurrent worker tasks calling `await worker_fn(item)`, record `results[item] = output`, call `queue.task_done()` in `finally`, await `queue.join()`, cancel worker tasks cleanly, and return `results`.",
+            "starter_files": {
+              "async_lab.py": "from __future__ import annotations\n\nimport asyncio\nfrom typing import Any, Awaitable, Callable\n\n\nasync def run_rate_limited(\n    factories: list[Callable[[], Awaitable[Any]]],\n    max_concurrency: int,\n) -> list[Any]:\n    # TODO: validate max_concurrency >= 1 and run factories bounded by asyncio.Semaphore\n    raise NotImplementedError\n\n\nasync def fetch_with_timeout(\n    coro_factory: Callable[[], Awaitable[Any]],\n    timeout: float,\n    default: Any = None,\n) -> Any:\n    # TODO: await with asyncio.wait_for and return default on TimeoutError\n    raise NotImplementedError\n\n\nasync def process_queue(\n    items: list[Any],\n    worker_fn: Callable[[Any], Awaitable[Any]],\n    num_workers: int,\n) -> dict[Any, Any]:\n    # TODO: implement producer-consumer pipeline with asyncio.Queue and num_workers tasks\n    raise NotImplementedError\n"
+            },
+            "test_code": "import asyncio\nimport time\nimport pytest\nfrom async_lab import fetch_with_timeout, process_queue, run_rate_limited\n\ndef test_run_rate_limited_order_and_bound():\n    async def scenario():\n        in_flight = 0\n        peak = 0\n\n        async def make_job(val: int, delay: float) -> int:\n            nonlocal in_flight, peak\n            in_flight += 1\n            peak = max(peak, in_flight)\n            try:\n                await asyncio.sleep(delay)\n                return val * 10\n            finally:\n                in_flight -= 1\n\n        delays = [0.05, 0.02, 0.04, 0.01, 0.03, 0.02]\n        factories = [lambda v=i, d=delays[i]: make_job(v, d) for i in range(6)]\n        results = await run_rate_limited(factories, max_concurrency=2)\n        return results, peak\n\n    results, peak = asyncio.run(scenario())\n    assert results == [0, 10, 20, 30, 40, 50]\n    assert peak == 2, f'Expected peak concurrency == 2, got {peak}'\n\n    with pytest.raises(ValueError):\n        asyncio.run(run_rate_limited([], max_concurrency=0))\n\ndef test_fetch_with_timeout_fast_and_slow():\n    async def fast() -> str:\n        await asyncio.sleep(0.01)\n        return 'ready'\n\n    async def slow() -> str:\n        await asyncio.sleep(0.25)\n        return 'too-late'\n\n    assert asyncio.run(fetch_with_timeout(fast, timeout=0.1, default='fallback')) == 'ready'\n    t0 = time.perf_counter()\n    out = asyncio.run(fetch_with_timeout(slow, timeout=0.03, default='timed-out'))\n    elapsed = time.perf_counter() - t0\n    assert out == 'timed-out'\n    assert elapsed < 0.15\n\ndef test_process_queue_workers_and_bounds():\n    async def scenario():\n        in_flight = 0\n        peak = 0\n\n        async def worker_fn(x: str) -> int:\n            nonlocal in_flight, peak\n            in_flight += 1\n            peak = max(peak, in_flight)\n            try:\n                await asyncio.sleep(0.025)\n                return len(x)\n            finally:\n                in_flight -= 1\n\n        items = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta']\n        res = await process_queue(items, worker_fn, num_workers=3)\n        empty_res = await process_queue([], worker_fn, num_workers=2)\n        return res, empty_res, peak\n\n    res, empty_res, peak = asyncio.run(scenario())\n    assert res == {'alpha': 5, 'beta': 4, 'gamma': 5, 'delta': 5, 'epsilon': 7, 'zeta': 4}\n    assert empty_res == {}\n    assert 2 <= peak <= 3, f'Expected concurrent worker pool peak in [2, 3], got {peak}'\n\n    async def noop(x):\n        return x\n\n    with pytest.raises(ValueError):\n        asyncio.run(process_queue(['a'], noop, num_workers=0))\n",
+            "hints": [
+              "In `run_rate_limited`, create `sem = asyncio.Semaphore(max_concurrency)` and define an inner `async def _run(fn): async with sem: return await fn()`, then `return list(await asyncio.gather(*(_run(f) for f in factories)))`.",
+              "In `fetch_with_timeout`, catch `TimeoutError` (which aliases `asyncio.TimeoutError` in Python 3.11+) and return `default`.",
+              "In `process_queue`, put all items into `q = asyncio.Queue()`, spawn `workers = [asyncio.create_task(_worker()) for _ in range(num_workers)]`, call `await q.join()`, then cancel each worker and `await asyncio.gather(*workers, return_exceptions=True)`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-14-concurrency-gil",
+      "tech_slug": "python",
+      "title": "Concurrency & Parallelism: Threads, Multiprocessing & concurrent.futures",
+      "subtitle": "Choose wisely between asyncio, threads, and processes using GIL intuition and thread-safe primitives.",
+      "difficulty": "advanced",
+      "kind": "zybooks",
+      "estimated_minutes": 10,
+      "order_index": 14,
+      "prereq_module_id": "py-13-async-deep-dive",
+      "summary": "Understand CPython's Global Interpreter Lock (GIL), distinguish I/O-bound from CPU-bound workloads, orchestrate worker pools with `ThreadPoolExecutor` and `ProcessPoolExecutor`, and prevent race conditions with `threading.Lock`.",
+      "tags": ["python", "threading", "multiprocessing", "gil", "concurrent-futures", "zybooks"],
+      "external_resources": [
+        {"label": "Python concurrent.futures Docs", "url": "https://docs.python.org/3/library/concurrent.futures.html"},
+        {"label": "Python threading Synchronization", "url": "https://docs.python.org/3/library/threading.html"}
+      ],
+      "sections": [
+        {
+          "title": "14.1 I/O-Bound vs CPU-Bound & CPython's GIL",
+          "body": "Standard CPython uses a **Global Interpreter Lock (GIL)** so only one thread executes Python bytecode at a time inside a single process. However, CPython **releases the GIL** during blocking OS I/O (network sockets, disk reads, `time.sleep`, database drivers) and heavy C extensions like NumPy. Choose your model by bottleneck: use `asyncio` for high-concurrency async I/O, `ThreadPoolExecutor` for blocking/synchronous I/O libraries, and `ProcessPoolExecutor` (separate OS processes, separate GILs) for pure-Python CPU-bound workloads.",
+          "code_example": "# Rule of thumb in standard CPython:\n# 1. Many async sockets/HTTP calls  -> asyncio\n# 2. Blocking I/O (sqlite, legacy)  -> ThreadPoolExecutor\n# 3. Heavy pure-Python CPU loops    -> ProcessPoolExecutor (true multi-core)"
+        },
+        {
+          "title": "14.2 `ThreadPoolExecutor`, `ProcessPoolExecutor` & `as_completed`",
+          "body": "`concurrent.futures` gives both threads and processes an identical high-level API. `pool.map(fn, items)` preserves exact input order, while `pool.submit(fn, arg)` returns `Future` objects you can drain in completion order with `as_completed(futures)`. When using `ProcessPoolExecutor`, worker functions and arguments are serialized across processes via `pickle`, so worker functions MUST be defined at module top level (never inline `lambda`s or local closures).",
+          "code_example": "from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed\n\ndef square_heavy(n: int) -> int:  # top-level -> picklable!\n    return sum(i * i for i in range(n))\n\nwith ThreadPoolExecutor(max_workers=4) as pool:\n    futures = [pool.submit(fetch_sync, url) for url in urls]\n    fastest_first = [f.result() for f in as_completed(futures)]\n\nwith ProcessPoolExecutor(max_workers=2) as pool:\n    totals = list(pool.map(square_heavy, [50_000, 60_000]))"
+        },
+        {
+          "title": "14.3 Race Conditions & Thread Safety with `threading.Lock`",
+          "body": "A common misconception is that the GIL makes Python code thread-safe. It does NOT: compound operations like `self.counts[k] = self.counts.get(k, 0) + 1` compile into multiple bytecode instructions, and the OS can switch threads right between reading and writing—silently losing updates! Guard every read-modify-write section on shared mutable state with `with self._lock:` using `threading.Lock()` so locks are always released even if an exception occurs.",
+          "code_example": "import threading\n\nclass SafeCounter:\n    def __init__(self) -> None:\n        self._lock = threading.Lock()\n        self._total = 0\n\n    def add(self, n: int = 1) -> None:\n        with self._lock:\n            self._total += n"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-14-read-check",
+          "title": "Participation Activity: Picking the Right Parallelism Model",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "You need to accelerate a pure-Python prime-factorization loop across 8 CPU cores in standard CPython. Which approach achieves true multi-core CPU parallelism?",
+            "options": [
+              "Launching 8 coroutines with `asyncio.gather`",
+              "Using `ThreadPoolExecutor(max_workers=8)`",
+              "Using `ProcessPoolExecutor(max_workers=8)` with a top-level picklable worker function",
+              "Wrapping the loop in a `threading.Lock()`"
+            ],
+            "correct_index": 2,
+            "explanation": "Pure-Python CPU loops hold the GIL inside a single process, preventing threads or `asyncio` from running Python bytecode on multiple cores simultaneously. `ProcessPoolExecutor` spawns separate Python processes, each with its own GIL.",
+            "hint": "Each OS process gets its own Python interpreter and its own GIL."
+          }
+        },
+        {
+          "id": "py-14-fill-blank",
+          "title": "Participation Activity: Wire ThreadPoolExecutor, Futures & Lock",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Complete the thread-safe concurrent fetch snippet using `threading` and `concurrent.futures`.",
+            "template": "from concurrent.futures import ThreadPoolExecutor, as_completed\nimport threading\n\nlock = threading.___()\nwith ___(max_workers=4) as pool:\n    futures = [pool.___(fetch_url, u) for u in urls]\n    results = [f.result() for f in as_completed(futures)]",
+            "blanks": [
+              {"accepted": ["Lock", "RLock"], "hint": "Mutex synchronization primitive"},
+              {"accepted": ["ThreadPoolExecutor"], "hint": "Thread pool context manager class"},
+              {"accepted": ["submit"], "hint": "Method scheduling one task and returning a Future"}
+            ],
+            "explanation": "`threading.Lock()` guards shared state, `ThreadPoolExecutor` manages worker threads in a `with` block, and `pool.submit(fn, arg)` returns a `Future` usable with `as_completed()`."
+          }
+        },
+        {
+          "id": "py-14-code-trace",
+          "title": "Participation Activity: Trace `pool.map` Ordering vs Completion Time",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 30,
+          "spec": {
+            "prompt": "Trace which worker finishes sleeping first versus what `pool.map` returns in `mapped`.",
+            "code": [
+              "from concurrent.futures import ThreadPoolExecutor",
+              "import time",
+              "def slow_double(pair):",
+              "    val, delay = pair",
+              "    time.sleep(delay)",
+              "    return val * 2",
+              "items = [(3, 0.05), (5, 0.01), (7, 0.03)]",
+              "with ThreadPoolExecutor(max_workers=3) as pool:",
+              "    mapped = list(pool.map(slow_double, items))",
+              "first = mapped[0]"
+            ],
+            "steps": [
+              {"line": 8, "note": "Three worker threads start concurrently; `time.sleep` releases the GIL so all 3 sleep in parallel."},
+              {"line": 5, "note": "The thread running `(5, 0.01)` finishes sleeping first (after 0.01s) and returns 10."},
+              {"line": 9, "note": "Despite finishing in order 5 -> 7 -> 3, `pool.map` collects results strictly in input order: [6, 10, 14]."},
+              {"line": 10, "note": "`first = mapped[0]` is 6 (from input 3 * 2), not 10."}
+            ],
+            "checkpoints": [
+              {
+                "id": "fastest_val",
+                "line": 5,
+                "label": "`val` whose thread finishes sleeping first",
+                "expected": "5",
+                "accepted": ["5"]
+              },
+              {
+                "id": "mapped",
+                "line": 9,
+                "label": "Full list value of `mapped`",
+                "expected": "[6, 10, 14]",
+                "accepted": ["[6, 10, 14]", "[6,10,14]"]
+              },
+              {
+                "id": "first",
+                "line": 10,
+                "label": "Value of `first`",
+                "expected": "6",
+                "accepted": ["6"]
+              }
+            ],
+            "explanation": "`pool.map` always preserves the original input order; use `pool.submit` + `as_completed` when you want results in completion order."
+          }
+        },
+        {
+          "id": "py-14-nvim-lab",
+          "title": "Neovim Lab: Thread-Safe Metrics, ThreadPool I/O & ProcessPool Primes",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 85,
+          "par_keystrokes": 160,
+          "spec": {
+            "primary_file": "concurrency_lab.py",
+            "instructions": "Implement three concurrency utilities in `concurrency_lab.py`:\n1. `class ThreadSafeMetrics`: uses a `threading.Lock` attribute to protect an internal `dict[str, int]`:\n   - `record(self, key: str, delta: int = 1) -> None`: atomically increments `key` by `delta`.\n   - `snapshot(self) -> dict[str, int]`: atomically returns a fresh shallow copy of all counts.\n   - `total(self) -> int`: atomically returns the sum of all counts.\n2. `def map_io_concurrent(fn: Callable[[Any], Any], items: list[Any], max_workers: int = 4) -> list[Any]`: raise `ValueError` if `max_workers < 1`; run `fn` over `items` concurrently via `ThreadPoolExecutor(max_workers=max_workers)` and return results in input order.\n3. Top-level picklable helper `_count_primes_in_range(bounds: tuple[int, int]) -> int` (counting primes `p` where `lo <= p < hi`) AND `def parallel_prime_counts(ranges: list[tuple[int, int]], max_workers: int = 2) -> list[int]`: raise `ValueError` if `max_workers < 1`, return `[]` if `ranges` is empty, otherwise compute prime counts across `ranges` in input order using `ProcessPoolExecutor(max_workers=max_workers)`.",
+            "starter_files": {
+              "concurrency_lab.py": "from __future__ import annotations\n\nfrom concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor\nimport math\nimport threading\nfrom typing import Any, Callable\n\n\nclass ThreadSafeMetrics:\n    def __init__(self) -> None:\n        # TODO: initialize threading.Lock and counts dict\n        raise NotImplementedError\n\n    def record(self, key: str, delta: int = 1) -> None:\n        # TODO: thread-safely increment key by delta\n        raise NotImplementedError\n\n    def snapshot(self) -> dict[str, int]:\n        # TODO: thread-safely return a copy of counts\n        raise NotImplementedError\n\n    def total(self) -> int:\n        # TODO: thread-safely return sum of all counts\n        raise NotImplementedError\n\n\ndef map_io_concurrent(\n    fn: Callable[[Any], Any],\n    items: list[Any],\n    max_workers: int = 4,\n) -> list[Any]:\n    # TODO: validate max_workers >= 1 and execute concurrently via ThreadPoolExecutor\n    raise NotImplementedError\n\n\ndef _count_primes_in_range(bounds: tuple[int, int]) -> int:\n    # TODO: top-level picklable function counting primes p with lo <= p < hi\n    raise NotImplementedError\n\n\ndef parallel_prime_counts(\n    ranges: list[tuple[int, int]],\n    max_workers: int = 2,\n) -> list[int]:\n    # TODO: validate max_workers >= 1 and compute counts via ProcessPoolExecutor\n    raise NotImplementedError\n"
+            },
+            "test_code": "from concurrent.futures import ThreadPoolExecutor\nimport threading\nimport time\nimport pytest\nfrom concurrency_lab import (\n    ThreadSafeMetrics,\n    _count_primes_in_range,\n    map_io_concurrent,\n    parallel_prime_counts,\n)\n\ndef test_thread_safe_metrics_lock_and_isolation():\n    metrics = ThreadSafeMetrics()\n    has_lock = any(\n        hasattr(v, 'acquire') and hasattr(v, 'release')\n        for v in metrics.__dict__.values()\n    )\n    assert has_lock, 'ThreadSafeMetrics must hold a threading.Lock instance'\n\n    def worker(_: int) -> None:\n        for _ in range(400):\n            metrics.record('ok', 1)\n            metrics.record('retry', 2)\n\n    with ThreadPoolExecutor(max_workers=8) as pool:\n        list(pool.map(worker, range(8)))\n\n    snap = metrics.snapshot()\n    assert snap == {'ok': 3200, 'retry': 6400}\n    assert metrics.total() == 9600\n    snap['ok'] = -999\n    assert metrics.snapshot()['ok'] == 3200\n\ndef test_map_io_concurrent_speed_and_order():\n    def fetch(pair: tuple[str, float]) -> str:\n        name, delay = pair\n        time.sleep(delay)\n        return f'done:{name}'\n\n    items = [('a', 0.05), ('b', 0.05), ('c', 0.05), ('d', 0.05)]\n    t0 = time.perf_counter()\n    out = map_io_concurrent(fetch, items, max_workers=4)\n    elapsed = time.perf_counter() - t0\n    assert out == ['done:a', 'done:b', 'done:c', 'done:d']\n    assert elapsed < 0.15, f'Expected concurrent ThreadPoolExecutor (<0.15s), took {elapsed:.3f}s'\n\n    with pytest.raises(ValueError):\n        map_io_concurrent(lambda x: x, [1], max_workers=0)\n\ndef test_parallel_prime_counts_process_pool():\n    assert _count_primes_in_range((0, 10)) == 4  # 2, 3, 5, 7\n    assert _count_primes_in_range((10, 20)) == 4  # 11, 13, 17, 19\n    ranges = [(2, 100), (100, 300), (300, 600)]\n    counts = parallel_prime_counts(ranges, max_workers=2)\n    assert counts == [25, 37, 47]\n    assert parallel_prime_counts([], max_workers=2) == []\n\n    with pytest.raises(ValueError):\n        parallel_prime_counts([(2, 10)], max_workers=0)\n",
+            "hints": [
+              "In `ThreadSafeMetrics`, set `self._lock = threading.Lock()` and `self._counts: dict[str, int] = {}`; wrap every method body in `with self._lock:` and return `dict(self._counts)` in `snapshot()`.",
+              "In `map_io_concurrent`, validate `max_workers >= 1` then use `with ThreadPoolExecutor(max_workers=max_workers) as pool: return list(pool.map(fn, items))`.",
+              "In `_count_primes_in_range((lo, hi))`, skip `n < 2` and test divisors up to `math.isqrt(n)`; then call `list(pool.map(_count_primes_in_range, ranges))` inside `ProcessPoolExecutor`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-15-dsa-algorithms",
+      "tech_slug": "python",
+      "title": "Pythonic Algorithms: heapq, deque, bisect & Graph BFS",
+      "subtitle": "Solve interview-grade priority queue, binary search, and shortest-path problems cleanly with the stdlib.",
+      "difficulty": "advanced",
+      "kind": "kata",
+      "estimated_minutes": 10,
+      "order_index": 15,
+      "prereq_module_id": "python-leetcode-hashmap",
+      "summary": "Use `collections.deque` for O(1) BFS queues, `heapq` for O(n log k) top-K and min-heaps, `bisect.bisect_left` for off-by-one-free binary search, and level-order shortest-path graph traversal.",
+      "tags": ["python", "algorithms", "leetcode", "heapq", "deque", "bisect", "bfs", "kata"],
+      "external_resources": [
+        {"label": "Python heapq & Priority Queues", "url": "https://docs.python.org/3/library/heapq.html"},
+        {"label": "Python bisect Binary Search", "url": "https://docs.python.org/3/library/bisect.html"}
+      ],
+      "sections": [
+        {
+          "title": "15.1 `heapq` Priority Queues & `bisect_left` Binary Search",
+          "body": "Python's `heapq` turns any plain `list` into a binary **min-heap** (`heapify` in O(n), `heappush`/`heappop` in O(log n)). To rank by highest priority first (like Top-K frequent items), store tuples `(-freq, value)` so Python's tuple comparison breaks ties cleanly by smallest `value`, or use `heapq.nsmallest(k, items, key=...)`. For sorted arrays, `bisect.bisect_left(arr, target)` returns the leftmost index where `target` belongs in O(log n), eliminating manual binary-search off-by-one bugs.",
+          "code_example": "import bisect, heapq\nfrom collections import Counter\n\ncounts = Counter([4, 1, 2, 1, 2, 3])\ntop2 = [val for val, _ in heapq.nsmallest(2, counts.items(), key=lambda kv: (-kv[1], kv[0]))]\n# top2 -> [1, 2]\n\narr = [10, 20, 20, 35]\nfirst_idx = bisect.bisect_left(arr, 20)   # 1\nend_idx   = bisect.bisect_right(arr, 20)  # 3 (last occurrence is end_idx - 1 == 2)"
+        },
+        {
+          "title": "15.2 `collections.deque` & Unweighted Shortest-Path BFS",
+          "body": "Popping from the front of a Python `list` (`list.pop(0)`) shifts every remaining element in O(n), turning BFS into O(V²). `collections.deque` guarantees O(1) `append()` and `popleft()`. Because Breadth-First Search visits nodes in non-decreasing edge distance from `start`, the **first** time you reach `goal` is guaranteed to be a shortest path. Always add neighbors to `visited` immediately when enqueueing them so cyclic graphs never loop or bloat the queue.",
+          "code_example": "from collections import deque\n\ndef bfs_distance(graph: dict[str, list[str]], start: str, goal: str) -> int:\n    if start == goal:\n        return 0\n    q = deque([(start, 0)])\n    visited = {start}\n    while q:\n        node, dist = q.popleft()\n        for nxt in graph.get(node, []):\n            if nxt == goal:\n                return dist + 1\n            if nxt not in visited:\n                visited.add(nxt)\n                q.append((nxt, dist + 1))\n    return -1"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-15-read-check",
+          "title": "Participation Activity: Why `deque.popleft()` Beats `list.pop(0)`",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "Why should a Python Breadth-First Search (BFS) queue use `collections.deque` with `popleft()` instead of a regular `list` with `pop(0)`?",
+            "options": [
+              "`list.pop(0)` violates FIFO ordering on large lists",
+              "`deque.popleft()` runs in O(1) time, whereas `list.pop(0)` shifts every remaining element in O(n) time",
+              "`deque` automatically deduplicates visited graph nodes",
+              "`deque` keeps elements sorted in min-heap order"
+            ],
+            "correct_index": 1,
+            "explanation": "`collections.deque` is implemented as a doubly-linked block list with O(1) pops from both ends, whereas `list` is a contiguous array that must shift all elements left on `pop(0)`.",
+            "hint": "Think about the time complexity of removing index 0 from a contiguous dynamic array."
+          }
+        },
+        {
+          "id": "py-15-code-trace",
+          "title": "Participation Activity: Trace `heapq` Min-Heap & `bisect_left`",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 30,
+          "spec": {
+            "prompt": "Trace the min-heap operations and binary search indices below.",
+            "code": [
+              "import bisect, heapq",
+              "heap = [9, 4, 7]",
+              "heapq.heapify(heap)",
+              "heapq.heappush(heap, 2)",
+              "smallest = heapq.heappop(heap)",
+              "next_min = heap[0]",
+              "nums = [10, 20, 20, 35, 50]",
+              "idx_left = bisect.bisect_left(nums, 20)",
+              "idx_ins = bisect.bisect_left(nums, 30)"
+            ],
+            "steps": [
+              {"line": 3, "note": "`heapify` puts the smallest value (4) at index 0 in O(n) time."},
+              {"line": 4, "note": "`heappush(heap, 2)` bubbles 2 to the root (`heap[0] == 2`)."},
+              {"line": 5, "note": "`heappop` removes and returns 2; 4 rises to `heap[0]`."},
+              {"line": 8, "note": "`bisect_left` returns index 1 for 20 (leftmost match) and index 3 for 30 (insertion spot before 35)."}
+            ],
+            "checkpoints": [
+              {"id": "smallest", "line": 5, "label": "Value of `smallest`", "expected": "2"},
+              {"id": "next_min", "line": 6, "label": "Value of `next_min`", "expected": "4"},
+              {"id": "idx_left", "line": 8, "label": "Value of `idx_left`", "expected": "1"},
+              {"id": "idx_ins", "line": 9, "label": "Value of `idx_ins`", "expected": "3"}
+            ],
+            "explanation": "`heapq` always keeps the minimum item at index 0, and `bisect_left` returns the first index `i` where `nums[i] >= target`."
+          }
+        },
+        {
+          "id": "py-15-nvim-lab",
+          "title": "Neovim Kata: Top-K Frequent, Binary Search Range & Shortest-Path BFS",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 2,
+          "xp_reward": 90,
+          "par_keystrokes": 165,
+          "spec": {
+            "primary_file": "dsa_kata.py",
+            "instructions": "Implement three classic interview functions in `dsa_kata.py` using Python's stdlib (`heapq`, `bisect`, `collections.deque`):\n1. `top_k_frequent(nums: list[int], k: int) -> list[int]`: return the `k` most frequent integers ordered by **frequency descending**, breaking ties by **value ascending** (return `[]` if `k <= 0` or `nums` is empty).\n2. `first_and_last_position(sorted_nums: list[int], target: int) -> tuple[int, int]`: using `bisect_left` and `bisect_right` in O(log n), return `(first_index, last_index)` of `target` in `sorted_nums`, or `(-1, -1)` if absent.\n3. `shortest_path_length(graph: dict[str, list[str]], start: str, goal: str) -> int`: return the minimum number of directed edges from `start` to `goal` using BFS (`deque` + `visited` set), `0` if `start == goal`, or `-1` if unreachable.",
+            "starter_files": {
+              "dsa_kata.py": "from __future__ import annotations\n\nimport bisect\nfrom collections import Counter, deque\nimport heapq\n\n\ndef top_k_frequent(nums: list[int], k: int) -> list[int]:\n    # TODO: return top k frequent ints (freq desc, value asc) using Counter + heapq\n    raise NotImplementedError\n\n\ndef first_and_last_position(sorted_nums: list[int], target: int) -> tuple[int, int]:\n    # TODO: O(log n) range lookup via bisect_left / bisect_right\n    raise NotImplementedError\n\n\ndef shortest_path_length(graph: dict[str, list[str]], start: str, goal: str) -> int:\n    # TODO: unweighted shortest path using collections.deque + visited set\n    raise NotImplementedError\n"
+            },
+            "test_code": "from dsa_kata import first_and_last_position, shortest_path_length, top_k_frequent\n\ndef test_top_k_frequent():\n    assert top_k_frequent([1, 1, 1, 2, 2, 3], 2) == [1, 2]\n    assert top_k_frequent([4, 4, 2, 2, 9, 9, 9], 2) == [9, 2]\n    assert top_k_frequent([5, 3, 5, 3, 1], 2) == [3, 5]\n    assert top_k_frequent([-1, -1, 0], 1) == [-1]\n    assert top_k_frequent([1, 2, 3], 0) == []\n    assert top_k_frequent([], 3) == []\n\ndef test_first_and_last_position():\n    assert first_and_last_position([5, 7, 7, 8, 8, 10], 8) == (3, 4)\n    assert first_and_last_position([5, 7, 7, 8, 8, 10], 6) == (-1, -1)\n    assert first_and_last_position([2, 2, 2, 2], 2) == (0, 3)\n    assert first_and_last_position([1, 3, 5], 1) == (0, 0)\n    assert first_and_last_position([1, 3, 5], 9) == (-1, -1)\n    assert first_and_last_position([], 5) == (-1, -1)\n\ndef test_shortest_path_length():\n    graph = {\n        'A': ['B', 'C'],\n        'B': ['D', 'A'],\n        'C': ['E'],\n        'D': ['F'],\n        'E': ['D', 'F'],\n        'F': ['A'],\n        'Z': [],\n    }\n    assert shortest_path_length(graph, 'A', 'A') == 0\n    assert shortest_path_length(graph, 'A', 'F') == 3\n    assert shortest_path_length(graph, 'B', 'F') == 2\n    assert shortest_path_length(graph, 'A', 'Z') == -1\n    assert shortest_path_length(graph, 'Z', 'A') == -1\n",
+            "hints": [
+              "In `top_k_frequent`, compute `counts = Counter(nums)` and use `heapq.nsmallest(k, counts.items(), key=lambda kv: (-kv[1], kv[0]))`.",
+              "In `first_and_last_position`, compute `lo = bisect.bisect_left(sorted_nums, target)`. If `lo == len(sorted_nums) or sorted_nums[lo] != target`, return `(-1, -1)`; otherwise `hi = bisect.bisect_right(sorted_nums, target) - 1`.",
+              "In `shortest_path_length`, check `if start == goal: return 0`, initialize `q = deque([(start, 0)])` and `visited = {start}`, and mark neighbors visited when pushing onto `q`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-16-boss-async-pipeline",
+      "tech_slug": "python",
+      "title": "Boss Project: Async Rate-Limited Data Ingestion & Retry Engine",
+      "subtitle": "Capstone Python project combining dataclasses, asyncio.Semaphore, exponential retries, error capture, and metrics.",
+      "difficulty": "advanced",
+      "kind": "project",
+      "estimated_minutes": 20,
+      "order_index": 16,
+      "prereq_module_id": "py-13-async-deep-dive",
+      "summary": "Architect a production-grade async ingestion engine using `@dataclass`, `asyncio.Semaphore` concurrency bounds, bounded retries with exponential backoff, per-attempt timeouts, non-fatal error capture, and structured summary metrics.",
+      "tags": ["boss-project", "python", "asyncio", "dataclasses", "retries", "concurrency"],
+      "external_resources": [
+        {"label": "Python dataclasses Reference", "url": "https://docs.python.org/3/library/dataclasses.html"},
+        {"label": "Python asyncio Synchronization Primitives", "url": "https://docs.python.org/3/library/asyncio-sync.html"}
+      ],
+      "sections": [
+        {
+          "title": "16.1 Project Spec: Typed Results & Summary Metrics",
+          "body": "Real ingestion pipelines never crash an entire batch when one upstream record flakes out. Model every per-item outcome with an immutable `@dataclass(frozen=True) class RecordResult(item_id, ok, value=None, error=None, attempts=1)` and aggregate batch telemetry into `@dataclass class PipelineSummary(results, total, succeeded, failed, total_attempts)` with a computed `@property def success_rate(self) -> float` rounded to 4 decimals (`0.0` for empty batches).",
+          "code_example": "from dataclasses import dataclass\nfrom typing import Any\n\n@dataclass(frozen=True)\nclass RecordResult:\n    item_id: str\n    ok: bool\n    value: Any = None\n    error: str | None = None\n    attempts: int = 1"
+        },
+        {
+          "title": "16.2 Concurrency Bounds, Exponential Backoff & Fault Isolation",
+          "body": "Inside `AsyncIngestionEngine.ingest(item_ids, fetcher)`, bound active calls to `fetcher` using `asyncio.Semaphore(self.max_concurrency)` and optionally guard each attempt with `asyncio.wait_for(..., timeout=self.timeout)`. When an attempt raises an exception and retries remain, release the semaphore BEFORE sleeping `self.base_backoff * (2 ** (attempt - 1))` so healthy tasks keep flowing. Once `max_retries + 1` attempts are exhausted, record the error string cleanly and preserve exact input order in `summary.results`.",
+          "code_example": "for attempt in range(1, self.max_retries + 2):\n    try:\n        async with sem:\n            coro = fetcher(item_id)\n            val = await (asyncio.wait_for(coro, timeout=self.timeout) if self.timeout is not None else coro)\n        return RecordResult(item_id=item_id, ok=True, value=val, attempts=attempt)\n    except Exception as exc:\n        last_err = str(exc) or type(exc).__name__\n        if attempt <= self.max_retries:\n            await asyncio.sleep(self.base_backoff * (2 ** (attempt - 1)))"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-16-boss-ingestion-m1",
+          "title": "Boss Checkpoint: Async Rate-Limited Data Ingestion & Retry Engine",
+          "activity_type": "boss_checkpoint",
+          "grader_type": "python",
+          "order_index": 0,
+          "xp_reward": 120,
+          "par_keystrokes": 170,
+          "spec": {
+            "primary_file": "ingestion_engine.py",
+            "instructions": "Build `ingestion_engine.py` implementing:\n1. `@dataclass(frozen=True) class RecordResult` with fields: `item_id: str`, `ok: bool`, `value: Any = None`, `error: str | None = None`, `attempts: int = 1`.\n2. `@dataclass class PipelineSummary` with fields: `results: list[RecordResult]`, `total: int`, `succeeded: int`, `failed: int`, `total_attempts: int`, plus `@property def success_rate(self) -> float` returning `0.0` if `total == 0` else `round(self.succeeded / self.total, 4)`.\n3. `class AsyncIngestionEngine`:\n   - `__init__(self, max_concurrency: int = 4, max_retries: int = 2, base_backoff: float = 0.01, timeout: float | None = None)`: raise `ValueError` if `max_concurrency < 1`, `max_retries < 0`, `base_backoff < 0`, or (`timeout is not None and timeout <= 0`).\n   - `async def ingest(self, item_ids: list[str], fetcher: Callable[[str], Awaitable[Any]]) -> PipelineSummary`:\n     - Uses `asyncio.Semaphore(self.max_concurrency)` so at most `max_concurrency` calls to `fetcher` are in flight concurrently.\n     - Retries failed attempts up to `max_retries` times (total `max_retries + 1` attempts), sleeping `base_backoff * (2 ** (attempt - 1))` between retries (outside the semaphore).\n     - Enforces `asyncio.wait_for(..., timeout=self.timeout)` on each attempt when `self.timeout is not None`.\n     - Captures exhausted failures as `RecordResult(item_id=..., ok=False, value=None, error=str(exc) or type(exc).__name__, attempts=...)` without failing other items.\n     - Preserves exact input order in `PipelineSummary.results` and computes accurate totals.",
+            "starter_files": {
+              "ingestion_engine.py": "from __future__ import annotations\n\nimport asyncio\nfrom dataclasses import dataclass\nfrom typing import Any, Awaitable, Callable\n\n\n@dataclass(frozen=True)\nclass RecordResult:\n    item_id: str\n    ok: bool\n    value: Any = None\n    error: str | None = None\n    attempts: int = 1\n\n\n@dataclass\nclass PipelineSummary:\n    results: list[RecordResult]\n    total: int\n    succeeded: int\n    failed: int\n    total_attempts: int\n\n    @property\n    def success_rate(self) -> float:\n        # TODO: return 0.0 when total == 0 else round(succeeded / total, 4)\n        raise NotImplementedError\n\n\nclass AsyncIngestionEngine:\n    def __init__(\n        self,\n        max_concurrency: int = 4,\n        max_retries: int = 2,\n        base_backoff: float = 0.01,\n        timeout: float | None = None,\n    ) -> None:\n        # TODO: validate arguments and store config\n        raise NotImplementedError\n\n    async def ingest(\n        self,\n        item_ids: list[str],\n        fetcher: Callable[[str], Awaitable[Any]],\n    ) -> PipelineSummary:\n        # TODO: run rate-limited ingestion with retries, exponential backoff, timeout, and error capture\n        raise NotImplementedError\n"
+            },
+            "test_code": "import asyncio\nfrom dataclasses import FrozenInstanceError, is_dataclass\nimport time\nimport pytest\nfrom ingestion_engine import AsyncIngestionEngine, PipelineSummary, RecordResult\n\ndef test_dataclasses_and_validation():\n    assert is_dataclass(RecordResult)\n    assert is_dataclass(PipelineSummary)\n    rec = RecordResult(item_id='x', ok=True, value=42, attempts=1)\n    with pytest.raises(FrozenInstanceError):\n        rec.ok = False  # type: ignore[misc]\n\n    with pytest.raises(ValueError):\n        AsyncIngestionEngine(max_concurrency=0)\n    with pytest.raises(ValueError):\n        AsyncIngestionEngine(max_retries=-1)\n    with pytest.raises(ValueError):\n        AsyncIngestionEngine(base_backoff=-0.1)\n    with pytest.raises(ValueError):\n        AsyncIngestionEngine(timeout=0)\n\ndef test_empty_batch():\n    async def noop(item_id: str) -> str:\n        return item_id\n\n    engine = AsyncIngestionEngine(max_concurrency=3, max_retries=1)\n    summary = asyncio.run(engine.ingest([], noop))\n    assert summary.results == []\n    assert summary.total == 0\n    assert summary.succeeded == 0\n    assert summary.failed == 0\n    assert summary.total_attempts == 0\n    assert summary.success_rate == 0.0\n\ndef test_rate_limiting_and_order_preservation():\n    async def scenario():\n        in_flight = 0\n        peak = 0\n        delays = {'a': 0.04, 'b': 0.01, 'c': 0.03, 'd': 0.02, 'e': 0.04, 'f': 0.01}\n\n        async def fetcher(item_id: str) -> str:\n            nonlocal in_flight, peak\n            in_flight += 1\n            peak = max(peak, in_flight)\n            try:\n                await asyncio.sleep(delays[item_id])\n                return item_id.upper()\n            finally:\n                in_flight -= 1\n\n        engine = AsyncIngestionEngine(max_concurrency=3, max_retries=1, base_backoff=0.005)\n        summary = await engine.ingest(['a', 'b', 'c', 'd', 'e', 'f'], fetcher)\n        return summary, peak\n\n    summary, peak = asyncio.run(scenario())\n    assert [r.item_id for r in summary.results] == ['a', 'b', 'c', 'd', 'e', 'f']\n    assert [r.value for r in summary.results] == ['A', 'B', 'C', 'D', 'E', 'F']\n    assert all(r.ok and r.attempts == 1 and r.error is None for r in summary.results)\n    assert summary.total == 6\n    assert summary.succeeded == 6\n    assert summary.failed == 0\n    assert summary.total_attempts == 6\n    assert summary.success_rate == 1.0\n    assert 2 <= peak <= 3, f'Expected semaphore peak in [2, 3], got {peak}'\n\ndef test_retries_exponential_backoff_and_error_capture():\n    async def scenario():\n        seen: dict[str, int] = {}\n\n        async def flaky_fetcher(item_id: str) -> str:\n            seen[item_id] = seen.get(item_id, 0) + 1\n            attempt = seen[item_id]\n            await asyncio.sleep(0.005)\n            if item_id == 'flaky-once' and attempt < 2:\n                raise ConnectionError('transient reset')\n            if item_id == 'flaky-twice' and attempt < 3:\n                raise RuntimeError('rate limited')\n            if item_id == 'broken':\n                raise ValueError('upstream 503')\n            return f'ingested:{item_id}'\n\n        engine = AsyncIngestionEngine(max_concurrency=4, max_retries=2, base_backoff=0.015)\n        t0 = time.perf_counter()\n        summary = await engine.ingest(['ok', 'flaky-once', 'flaky-twice', 'broken'], flaky_fetcher)\n        elapsed = time.perf_counter() - t0\n        return summary, elapsed\n\n    summary, elapsed = asyncio.run(scenario())\n    by_id = {r.item_id: r for r in summary.results}\n    assert [r.item_id for r in summary.results] == ['ok', 'flaky-once', 'flaky-twice', 'broken']\n\n    assert by_id['ok'].ok is True and by_id['ok'].attempts == 1 and by_id['ok'].value == 'ingested:ok'\n    assert by_id['flaky-once'].ok is True and by_id['flaky-once'].attempts == 2\n    assert by_id['flaky-twice'].ok is True and by_id['flaky-twice'].attempts == 3\n    assert by_id['broken'].ok is False and by_id['broken'].attempts == 3\n    assert by_id['broken'].value is None and 'upstream 503' in (by_id['broken'].error or '')\n\n    assert summary.total == 4\n    assert summary.succeeded == 3\n    assert summary.failed == 1\n    assert summary.total_attempts == 9\n    assert summary.success_rate == 0.75\n    assert elapsed >= 0.04, f'Expected exponential backoff (>=0.04s for 0.015+0.030), took {elapsed:.4f}s'\n\ndef test_timeout_triggers_retry_and_capture():\n    async def scenario():\n        calls = 0\n\n        async def slow_fetcher(item_id: str) -> str:\n            nonlocal calls\n            calls += 1\n            if item_id == 'hang':\n                await asyncio.sleep(0.25)\n                return 'never'\n            await asyncio.sleep(0.005)\n            return 'fast-ok'\n\n        engine = AsyncIngestionEngine(max_concurrency=2, max_retries=1, base_backoff=0.005, timeout=0.03)\n        t0 = time.perf_counter()\n        summary = await engine.ingest(['fast', 'hang'], slow_fetcher)\n        elapsed = time.perf_counter() - t0\n        return summary, elapsed, calls\n\n    summary, elapsed, calls = asyncio.run(scenario())\n    assert summary.results[0].ok is True and summary.results[0].value == 'fast-ok'\n    assert summary.results[1].ok is False and summary.results[1].attempts == 2\n    assert summary.results[1].error\n    assert summary.succeeded == 1 and summary.failed == 1 and summary.success_rate == 0.5\n    assert calls == 3\n    assert elapsed < 0.22, f'Timeout did not abort hung calls promptly ({elapsed:.3f}s)'\n",
+            "hints": [
+              "Create `sem = asyncio.Semaphore(self.max_concurrency)` inside `ingest` and write an inner `async def _process_one(item_id: str) -> RecordResult` helper.",
+              "Inside `_process_one`, loop `for attempt in range(1, self.max_retries + 2):`, acquire `async with sem:` around the `fetcher(item_id)` / `asyncio.wait_for(...)` call, and sleep `self.base_backoff * (2 ** (attempt - 1))` outside the semaphore on retryable failures.",
+              "Use `results = list(await asyncio.gather(*(_process_one(i) for i in item_ids)))` to preserve input order while running concurrently."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

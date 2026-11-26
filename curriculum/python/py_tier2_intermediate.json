@@ -1,0 +1,589 @@
+{
+  "modules": [
+    {
+      "id": "py-07-exceptions-logging",
+      "tech_slug": "python",
+      "title": "Exceptions, Custom Error Hierarchies & Structured Logging",
+      "subtitle": "Handle failure paths cleanly with EAFP, chained domain errors, and structured logging instead of print().",
+      "difficulty": "intermediate",
+      "kind": "zybooks",
+      "estimated_minutes": 9,
+      "order_index": 7,
+      "prereq_module_id": "python-comprehensions-101",
+      "summary": "Master the full four-clause `try/except/else/finally` flow, choose EAFP over racy LBYL checks, preserve root tracebacks with `raise ... from err`, design custom exception hierarchies, and emit structured diagnostics with Python's `logging` module.",
+      "tags": ["python", "exceptions", "logging", "eafp", "zybooks"],
+      "external_resources": [
+        {"label": "Python Tutorial: Errors and Exceptions", "url": "https://docs.python.org/3/tutorial/errors.html"},
+        {"label": "Python Logging HOWTO", "url": "https://docs.python.org/3/howto/logging.html"}
+      ],
+      "sections": [
+        {
+          "title": "7.1 `try / except / else / finally` & EAFP vs LBYL",
+          "body": "Keep your `try` block as narrow as possible so you never accidentally swallow an unrelated bug. Put code that should only execute when `try` succeeds into `else:`, and put unconditional cleanup into `finally:`. Python favors **EAFP** (*Easier to Ask for Forgiveness than Permission*): attempt the operation and catch the specific exception rather than performing a separate **LBYL** (*Look Before You Leap*) pre-check that can race or duplicate work.",
+          "code_example": "# EAFP: single lookup + tight try/else/finally\ndef parse_timeout(cfg: dict[str, str]) -> float:\n    try:\n        raw = cfg[\"timeout\"]\n        seconds = float(raw)\n    except (KeyError, ValueError) as err:\n        raise ValueError(f\"Invalid timeout config: {err}\") from err\n    else:\n        return seconds\n    finally:\n        pass  # always runs for resource teardown"
+        },
+        {
+          "title": "7.2 Custom Exception Hierarchies & `raise ... from err`",
+          "body": "Production packages define a single base domain exception (e.g., `class ConfigError(Exception)`) and subclass it for specific failure modes (`MissingKeyError`, `InvalidValueError`). Callers can then catch either the broad base class or a narrow leaf class. When translating a low-level exception into a domain error, always write `raise DomainError(...) from err` so Python preserves the original exception on `__cause__` and prints the full causal traceback.",
+          "code_example": "class ConfigError(Exception):\n    \"\"\"Base error for configuration failures.\"\"\"\n\nclass MissingKeyError(ConfigError):\n    def __init__(self, key: str) -> None:\n        super().__init__(f\"Missing required key: {key}\")\n        self.key = key\n\ntry:\n    val = env[\"API_PORT\"]\nexcept KeyError as err:\n    raise MissingKeyError(\"API_PORT\") from err"
+        },
+        {
+          "title": "7.3 Structured Diagnostics with `logging`",
+          "body": "Unlike `print()`, Python's `logging` module attaches severity levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`), timestamps, module names via `logging.getLogger(__name__)`, and pluggable handlers. Prefer lazy `%`-style placeholders (`logger.error(\"Bad key %s: %s\", key, err)`) so message formatting is skipped when the level is disabled, and use `logger.exception(...)` inside an `except` block to attach the active stack trace automatically.",
+          "code_example": "import logging\n\nlogger = logging.getLogger(__name__)\n\ndef connect(host: str, port: int) -> None:\n    logger.info(\"Connecting to %s:%d\", host, port)\n    if port <= 0:\n        logger.error(\"Rejected non-positive port=%d for host=%s\", port, host)\n        raise ValueError(\"port must be positive\")"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-07-read-check",
+          "title": "Participation Activity: Explicit Exception Chaining (`raise ... from err`)",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "Inside an `except KeyError as err:` handler, what is the primary advantage of `raise MissingKeyError(key) from err` over a plain `raise MissingKeyError(key)`?",
+            "options": [
+              "It suppresses the traceback completely so logs stay single-line",
+              "It explicitly links the original `KeyError` as `__cause__`, preserving root-cause diagnostics across domain boundaries",
+              "It automatically retries the `try` block once before propagating",
+              "It converts `MissingKeyError` into a subclass of `KeyError` at runtime"
+            ],
+            "correct_index": 1,
+            "explanation": "`raise DomainError(...) from err` sets `__cause__ = err`, explicitly documenting that the low-level error directly caused the higher-level domain exception.",
+            "hint": "Check which dunder attribute Python populates when you chain exceptions with `from`."
+          }
+        },
+        {
+          "id": "py-07-code-trace",
+          "title": "Participation Activity: Trace `try / except / else / finally`",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Step through both calls to `run_stage` and predict the exact entries recorded in `ok_log` and `err_log`.",
+            "code": [
+              "def run_stage(raw, log):",
+              "    try:",
+              "        num = int(raw)",
+              "    except ValueError:",
+              "        log.append(\"except\")",
+              "    else:",
+              "        log.append(f\"else:{num}\")",
+              "    finally:",
+              "        log.append(\"finally\")",
+              "ok_log = []",
+              "run_stage(\"5\", ok_log)",
+              "err_log = []",
+              "run_stage(\"nan\", err_log)"
+            ],
+            "steps": [
+              {"line": 11, "note": "Calls `run_stage(\"5\", ok_log)`: `int(\"5\")` succeeds with `num = 5`."},
+              {"line": 7, "note": "Because no exception occurred in `try`, `except` is skipped and `else` runs."},
+              {"line": 9, "note": "`finally` executes unconditionally after `else`."},
+              {"line": 13, "note": "Calls `run_stage(\"nan\", err_log)`: `int(\"nan\")` raises `ValueError`, running `except`, skipping `else`, then running `finally`."}
+            ],
+            "checkpoints": [
+              {
+                "id": "ok_0",
+                "line": 11,
+                "label": "Value of `ok_log[0]`",
+                "expected": "else:5",
+                "accepted": ["else:5", "'else:5'", "\"else:5\""]
+              },
+              {
+                "id": "ok_1",
+                "line": 11,
+                "label": "Value of `ok_log[1]`",
+                "expected": "finally",
+                "accepted": ["finally", "'finally'", "\"finally\""]
+              },
+              {
+                "id": "err_0",
+                "line": 13,
+                "label": "Value of `err_log[0]`",
+                "expected": "except",
+                "accepted": ["except", "'except'", "\"except\""]
+              },
+              {
+                "id": "err_1",
+                "line": 13,
+                "label": "Value of `err_log[1]`",
+                "expected": "finally",
+                "accepted": ["finally", "'finally'", "\"finally\""]
+              }
+            ],
+            "explanation": "`else` runs only when `try` completes without raising; `except` runs on matching errors; `finally` always runs last."
+          }
+        },
+        {
+          "id": "py-07-parsons",
+          "title": "Participation Activity: Assemble an EAFP Port Loader",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Order these lines to build an EAFP `load_port(cfg)` function that logs errors, chains `ConfigError`, and returns the parsed port from `else`.",
+            "lines": [
+              "    except (KeyError, ValueError) as err:",
+              "        return port",
+              "def load_port(cfg):",
+              "        logger.error(\"Invalid port: %s\", err)",
+              "    try:",
+              "        raise ConfigError(\"bad port\") from err",
+              "    else:",
+              "        port = int(cfg[\"port\"])"
+            ],
+            "correct_order": [2, 4, 7, 0, 3, 5, 6, 1],
+            "valid_orders": [
+              [2, 4, 7, 0, 3, 5, 6, 1]
+            ],
+            "explanation": "Parse inside `try:`, log BEFORE `raise ConfigError(...) from err` inside `except:`, and return `port` in `else:`."
+          }
+        },
+        {
+          "id": "py-07-nvim-lab",
+          "title": "Neovim Lab: Config Error Hierarchy & Structured Audit Logger",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 80,
+          "par_keystrokes": 145,
+          "spec": {
+            "primary_file": "error_pipeline.py",
+            "instructions": "Complete `error_pipeline.py` with a custom exception hierarchy and structured logging:\n1. Define exception classes:\n   - `ConfigError(Exception)`: base domain exception.\n   - `MissingKeyError(ConfigError)`: `__init__(self, key: str)` storing `self.key = key` and passing a clear message to `super().__init__(...)`.\n   - `InvalidValueError(ConfigError)`: `__init__(self, key: str, raw_value: str)` storing `self.key = key` and `self.raw_value = raw_value`.\n2. Implement `parse_positive_int(config: dict[str, str], key: str, logger: logging.Logger | None = None) -> int`:\n   - Use EAFP to read `raw = config[key]`; on `KeyError as err`, emit an `ERROR` log if `logger` is provided and `raise MissingKeyError(key) from err`.\n   - Convert `int(raw)`; on `ValueError as err`, emit an `ERROR` log if `logger` is provided and `raise InvalidValueError(key, raw) from err`.\n   - If the parsed integer is `<= 0`, emit an `ERROR` log if `logger` is provided and `raise InvalidValueError(key, raw)`.\n   - On success (`else`), emit an `INFO` log containing both `key` and the parsed value if `logger` is provided, then return the integer.\n3. Implement `load_batch(records: list[dict[str, str]], key: str, logger: logging.Logger) -> tuple[list[int], list[ConfigError]]`: parse every record via `parse_positive_int`, collecting valid ints and caught `ConfigError` exceptions without aborting the batch.",
+            "starter_files": {
+              "error_pipeline.py": "from __future__ import annotations\n\nimport logging\n\n\nclass ConfigError(Exception):\n    \"\"\"Base exception for configuration parsing errors.\"\"\"\n\n\nclass MissingKeyError(ConfigError):\n    def __init__(self, key: str) -> None:\n        # TODO: store self.key and call super().__init__\n        raise NotImplementedError\n\n\nclass InvalidValueError(ConfigError):\n    def __init__(self, key: str, raw_value: str) -> None:\n        # TODO: store self.key, self.raw_value and call super().__init__\n        raise NotImplementedError\n\n\ndef parse_positive_int(\n    config: dict[str, str],\n    key: str,\n    logger: logging.Logger | None = None,\n) -> int:\n    # TODO: EAFP lookup + int conversion + positive check + chaining + logging\n    raise NotImplementedError\n\n\ndef load_batch(\n    records: list[dict[str, str]],\n    key: str,\n    logger: logging.Logger,\n) -> tuple[list[int], list[ConfigError]]:\n    # TODO: parse all records, collecting (valid_values, errors)\n    raise NotImplementedError\n"
+            },
+            "test_code": "import logging\nimport pytest\nfrom error_pipeline import (\n    ConfigError,\n    InvalidValueError,\n    MissingKeyError,\n    load_batch,\n    parse_positive_int,\n)\n\n\ndef test_exception_hierarchy():\n    assert issubclass(ConfigError, Exception)\n    assert issubclass(MissingKeyError, ConfigError)\n    assert issubclass(InvalidValueError, ConfigError)\n    m = MissingKeyError('workers')\n    assert m.key == 'workers'\n    assert 'workers' in str(m)\n    iv = InvalidValueError('workers', '-2')\n    assert iv.key == 'workers'\n    assert iv.raw_value == '-2'\n\n\ndef test_parse_positive_int_success_and_info_log(caplog):\n    logger = logging.getLogger('devquest.ch07.ok')\n    with caplog.at_level(logging.INFO, logger='devquest.ch07.ok'):\n        val = parse_positive_int({'workers': '8'}, 'workers', logger=logger)\n    assert val == 8\n    assert any(r.levelno == logging.INFO and 'workers' in r.message and '8' in r.message for r in caplog.records)\n    assert parse_positive_int({'workers': '3'}, 'workers') == 3\n\n\ndef test_parse_positive_int_chaining_and_error_logs(caplog):\n    logger = logging.getLogger('devquest.ch07.err')\n    with caplog.at_level(logging.INFO, logger='devquest.ch07.err'):\n        with pytest.raises(MissingKeyError) as missing_info:\n            parse_positive_int({}, 'port', logger=logger)\n        assert missing_info.value.key == 'port'\n        assert isinstance(missing_info.value.__cause__, KeyError)\n\n        with pytest.raises(InvalidValueError) as bad_int_info:\n            parse_positive_int({'port': 'abc'}, 'port', logger=logger)\n        assert bad_int_info.value.key == 'port'\n        assert bad_int_info.value.raw_value == 'abc'\n        assert isinstance(bad_int_info.value.__cause__, ValueError)\n\n        with pytest.raises(InvalidValueError) as non_pos_info:\n            parse_positive_int({'port': '0'}, 'port', logger=logger)\n        assert non_pos_info.value.raw_value == '0'\n\n    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]\n    assert len(error_records) >= 3\n\n\ndef test_load_batch_resilience(caplog):\n    logger = logging.getLogger('devquest.ch07.batch')\n    records = [\n        {'threads': '4'},\n        {},\n        {'threads': 'fast'},\n        {'threads': '-1'},\n        {'threads': '16'},\n    ]\n    with caplog.at_level(logging.INFO, logger='devquest.ch07.batch'):\n        values, errors = load_batch(records, 'threads', logger=logger)\n    assert values == [4, 16]\n    assert len(errors) == 3\n    assert isinstance(errors[0], MissingKeyError)\n    assert isinstance(errors[1], InvalidValueError)\n    assert isinstance(errors[2], InvalidValueError)\n    assert all(isinstance(e, ConfigError) for e in errors)\n    assert any(r.levelno == logging.INFO for r in caplog.records)\n    assert sum(1 for r in caplog.records if r.levelno == logging.ERROR) >= 3\n",
+            "hints": [
+              "In `parse_positive_int`, catch `KeyError as err` first, then `ValueError as err` around `int(raw)`, chaining both with `raise ... from err`.",
+              "Only call `logger.info(...)` / `logger.error(...)` when `logger is not None` so callers can omit `logger` safely.",
+              "In `load_batch`, catch `ConfigError as err` inside the loop so both `MissingKeyError` and `InvalidValueError` are collected."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-08-oop-dataclasses",
+      "tech_slug": "python",
+      "title": "Classes, Dataclasses, Dunder Methods & Composition",
+      "subtitle": "Model immutable value objects with frozen slotted dataclasses, clean dunder protocols, and structural typing.",
+      "difficulty": "intermediate",
+      "kind": "zybooks",
+      "estimated_minutes": 9,
+      "order_index": 8,
+      "prereq_module_id": "py-07-exceptions-logging",
+      "summary": "Eliminate OOP boilerplate with `@dataclass(frozen=True, slots=True)`, expose computed attributes via `@property`, integrate cleanly with Python built-ins through `__repr__`/`__eq__`/`__len__`/`__iter__`, and favor composition with `typing.Protocol` over rigid inheritance trees.",
+      "tags": ["python", "oop", "dataclasses", "protocol", "zybooks"],
+      "external_resources": [
+        {"label": "Python dataclasses Reference", "url": "https://docs.python.org/3/library/dataclasses.html"},
+        {"label": "PEP 544: Protocols (Structural Subtyping)", "url": "https://peps.python.org/pep-0544/"}
+      ],
+      "sections": [
+        {
+          "title": "8.1 Value Objects with `@dataclass(frozen=True, slots=True)`",
+          "body": "`@dataclass` auto-generates `__init__`, `__repr__`, and value-based `__eq__`. Adding `frozen=True` prevents field mutation after construction and automatically generates `__hash__` (when fields are hashable), letting instances live in `set`s or as `dict` keys. Adding `slots=True` (Python 3.10+) removes per-instance `__dict__` allocation for lower memory usage and catches typo attributes immediately. Use `__post_init__` to enforce invariants at creation time.",
+          "code_example": "from dataclasses import dataclass\n\n@dataclass(frozen=True, slots=True)\nclass LineItem:\n    sku: str\n    unit_price: float\n    qty: int = 1\n\n    def __post_init__(self) -> None:\n        if self.unit_price < 0 or self.qty <= 0:\n            raise ValueError(\"Invalid price or quantity\")"
+        },
+        {
+          "title": "8.2 `@property` & Essential Dunder Methods",
+          "body": "Use `@property` to compute derived values on demand (`item.subtotal`) with clean attribute access instead of stale cached fields. Implement Python data-model dunders—`__repr__` for unambiguous debugging output, `__eq__` for value comparison, and `__len__` / `__iter__` for custom containers—so your objects work seamlessly with `len(cart)`, `for item in cart`, and `list(cart)`.",
+          "code_example": "class Bag:\n    def __init__(self) -> None:\n        self._items: list[str] = []\n\n    def __len__(self) -> int:\n        return len(self._items)\n\n    def __iter__(self):\n        return iter(self._items)\n\n    def __repr__(self) -> str:\n        return f\"Bag(count={len(self)})\""
+        },
+        {
+          "title": "8.3 Composition Over Inheritance & `typing.Protocol`",
+          "body": "Deep inheritance hierarchies couple subclasses tightly to parent internals. Instead, compose small collaborators (such as passing a discount strategy object into a `Cart`). Declare the expected interface with `typing.Protocol` (and optional `@runtime_checkable`): any class providing the matching method signature conforms automatically without inheriting from a shared base class.",
+          "code_example": "from typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass PricingRule(Protocol):\n    def apply(self, subtotal: float) -> float: ...\n\nclass FlatCoupon:\n    def __init__(self, amount: float) -> None:\n        self.amount = amount\n    def apply(self, subtotal: float) -> float:\n        return max(0.0, subtotal - self.amount)"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-08-read-check",
+          "title": "Participation Activity: Why Combine `frozen=True` and `slots=True`?",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "What combined benefits do you get from decorating a value object with `@dataclass(frozen=True, slots=True)`?",
+            "options": [
+              "Automatic JSON serialization and runtime type coercion for all fields",
+              "Immutability (plus hashability when fields are hashable) alongside lower per-instance memory overhead without a `__dict__`",
+              "Private name-mangling on all fields and automatic thread locking",
+              "Disabling value equality (`__eq__`) in favor of identity comparison (`is`)"
+            ],
+            "correct_index": 1,
+            "explanation": "`frozen=True` blocks attribute reassignment and enables `__hash__` for hashable fields, while `slots=True` replaces per-instance `__dict__` storage with compact fixed slots.",
+            "hint": "Think about immutability/hashability for `frozen=True` and `__dict__` memory footprint for `slots=True`."
+          }
+        },
+        {
+          "id": "py-08-fill-blank",
+          "title": "Participation Activity: Complete Dataclass, Property & Protocol",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Fill in the three decorators/base classes to define a frozen slotted `Box` with a computed `area` property and a structural `HasArea` interface.",
+            "template": "@___(frozen=True, slots=True)\nclass Box:\n    width: int\n    height: int\n\n    @___\n    def area(self) -> int:\n        return self.width * self.height\n\nclass HasArea(___):\n    @property\n    def area(self) -> int: ...",
+            "blanks": [
+              {"accepted": ["dataclass"], "hint": "Class decorator from `dataclasses`"},
+              {"accepted": ["property"], "hint": "Built-in decorator for computed attributes"},
+              {"accepted": ["Protocol"], "hint": "Structural typing base class from `typing`"}
+            ],
+            "explanation": "`@dataclass(frozen=True, slots=True)` generates an immutable slotted record, `@property` exposes `box.area`, and `Protocol` declares structural conformance."
+          }
+        },
+        {
+          "id": "py-08-code-trace",
+          "title": "Participation Activity: Trace Dataclass Equality, Hashing & Dunders",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Trace value equality, object identity, set hashing, and the `@property` computation below.",
+            "code": [
+              "from dataclasses import dataclass",
+              "@dataclass(frozen=True, slots=True)",
+              "class Card:",
+              "    suit: str",
+              "    rank: int",
+              "class Hand:",
+              "    def __init__(self, cards):",
+              "        self._cards = list(cards)",
+              "    def __len__(self):",
+              "        return len(self._cards)",
+              "    @property",
+              "    def total(self):",
+              "        return sum(c.rank for c in self._cards)",
+              "c1 = Card(\"spades\", 10)",
+              "c2 = Card(\"spades\", 10)",
+              "eq = (c1 == c2)",
+              "same_obj = (c1 is c2)",
+              "uniq = len({c1, c2, Card(\"hearts\", 5)})",
+              "h = Hand([c1, Card(\"hearts\", 5)])",
+              "score = h.total"
+            ],
+            "steps": [
+              {"line": 16, "note": "`@dataclass` generates value-based `__eq__`, comparing `(suit, rank)` fields."},
+              {"line": 17, "note": "`is` checks whether `c1` and `c2` point to the exact same object in memory."},
+              {"line": 18, "note": "`frozen=True` generates `__hash__`, so equal `Card` values collapse in a `set`."},
+              {"line": 20, "note": "`h.total` runs the `@property` getter across the two cards in `h`."}
+            ],
+            "checkpoints": [
+              {"id": "eq", "line": 16, "label": "Value of `eq`", "expected": "True"},
+              {"id": "same_obj", "line": 17, "label": "Value of `same_obj`", "expected": "False"},
+              {"id": "uniq", "line": 18, "label": "Value of `uniq`", "expected": "2"},
+              {"id": "score", "line": 20, "label": "Value of `score`", "expected": "15"}
+            ],
+            "explanation": "Frozen dataclasses compare and hash by value (`c1 == c2` is `True`, `c1 is c2` is `False`, set size is `2`), while `Hand.total` sums `10 + 5 = 15`."
+          }
+        },
+        {
+          "id": "py-08-nvim-lab",
+          "title": "Neovim Lab: Frozen Value Objects, Dunder Container & Protocol Composition",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 80,
+          "par_keystrokes": 150,
+          "spec": {
+            "primary_file": "inventory.py",
+            "instructions": "Complete `inventory.py` using dataclasses, dunders, and Protocol composition:\n1. `@dataclass(frozen=True, slots=True) class LineItem`: fields `sku: str`, `unit_price: float`, `qty: int = 1`.\n   - Validate in `__post_init__`: raise `ValueError` if `not self.sku.strip()`, `self.unit_price < 0`, or `self.qty <= 0`.\n   - Add `@property def subtotal(self) -> float` returning `round(self.unit_price * self.qty, 2)`.\n2. `@runtime_checkable class PricingRule(Protocol)` declaring `def apply(self, subtotal: float) -> float: ...`.\n3. `class PercentDiscount` (do NOT subclass `PricingRule`—rely on structural typing): initialized with `percent: float` (raise `ValueError` unless `0 <= percent <= 100`), implementing `apply(self, subtotal: float) -> float` returning `round(subtotal * (1 - self.percent / 100), 2)`.\n4. `class Cart`: initialized with optional `rule: PricingRule | None = None`, holding a private list of `LineItem` objects:\n   - `add(self, item: LineItem) -> None`: appends `item`.\n   - `__len__(self) -> int`: number of `LineItem` entries.\n   - `__iter__(self) -> Iterator[LineItem]`: iterates over stored items.\n   - `__repr__(self) -> str`: returns `f'Cart(items={len(self)}, total={self.total:.2f})'`.\n   - `@property def total_units(self) -> int`: sum of `item.qty` across all items.\n   - `@property def raw_subtotal(self) -> float`: `round(sum(i.subtotal for i in self._items), 2)`.\n   - `@property def total(self) -> float`: `round(self._rule.apply(self.raw_subtotal), 2)` if a rule is attached, else `self.raw_subtotal`.",
+            "starter_files": {
+              "inventory.py": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom typing import Iterator, Protocol, runtime_checkable\n\n\n@dataclass(frozen=True, slots=True)\nclass LineItem:\n    sku: str\n    unit_price: float\n    qty: int = 1\n\n    def __post_init__(self) -> None:\n        # TODO: validate non-blank sku, unit_price >= 0, qty > 0\n        raise NotImplementedError\n\n    @property\n    def subtotal(self) -> float:\n        raise NotImplementedError\n\n\n@runtime_checkable\nclass PricingRule(Protocol):\n    def apply(self, subtotal: float) -> float: ...\n\n\nclass PercentDiscount:\n    def __init__(self, percent: float) -> None:\n        # TODO: validate 0 <= percent <= 100\n        raise NotImplementedError\n\n    def apply(self, subtotal: float) -> float:\n        raise NotImplementedError\n\n\nclass Cart:\n    def __init__(self, rule: PricingRule | None = None) -> None:\n        # TODO: store self._items and self._rule\n        raise NotImplementedError\n\n    def add(self, item: LineItem) -> None:\n        raise NotImplementedError\n\n    def __len__(self) -> int:\n        raise NotImplementedError\n\n    def __iter__(self) -> Iterator[LineItem]:\n        raise NotImplementedError\n\n    def __repr__(self) -> str:\n        raise NotImplementedError\n\n    @property\n    def total_units(self) -> int:\n        raise NotImplementedError\n\n    @property\n    def raw_subtotal(self) -> float:\n        raise NotImplementedError\n\n    @property\n    def total(self) -> float:\n        raise NotImplementedError\n"
+            },
+            "test_code": "from dataclasses import FrozenInstanceError\nimport pytest\nfrom inventory import Cart, LineItem, PercentDiscount, PricingRule\n\n\ndef test_line_item_frozen_slotted_and_validated():\n    a = LineItem('KB-01', 49.99, 2)\n    b = LineItem('KB-01', 49.99, 2)\n    assert a == b\n    assert len({a, b}) == 1\n    assert a.subtotal == 99.98\n    assert not hasattr(a, '__dict__')\n    with pytest.raises(FrozenInstanceError):\n        a.qty = 5  # type: ignore[misc]\n\n    for bad in [('  ', 10.0, 1), ('SKU', -1.0, 1), ('SKU', 10.0, 0)]:\n        with pytest.raises(ValueError):\n            LineItem(*bad)\n\n\ndef test_protocol_structural_typing_and_discount():\n    disc = PercentDiscount(15)\n    assert isinstance(disc, PricingRule)\n    assert PricingRule not in PercentDiscount.__mro__\n    assert disc.apply(200.0) == 170.0\n\n    with pytest.raises(ValueError):\n        PercentDiscount(-5)\n    with pytest.raises(ValueError):\n        PercentDiscount(105)\n\n    class FlatOff:\n        def apply(self, subtotal: float) -> float:\n            return max(0.0, subtotal - 25.0)\n\n    assert isinstance(FlatOff(), PricingRule)\n\n\ndef test_cart_dunders_and_composition():\n    cart = Cart()\n    cart.add(LineItem('SSD-1TB', 80.0, 2))\n    cart.add(LineItem('CABLE', 10.5, 1))\n    assert len(cart) == 2\n    assert cart.total_units == 3\n    assert [i.sku for i in cart] == ['SSD-1TB', 'CABLE']\n    assert cart.raw_subtotal == 170.5\n    assert cart.total == 170.5\n    assert repr(cart) == 'Cart(items=2, total=170.50)'\n\n    discounted = Cart(rule=PercentDiscount(10))\n    discounted.add(LineItem('GPU-FAN', 50.0, 2))\n    assert discounted.raw_subtotal == 100.0\n    assert discounted.total == 90.0\n    assert repr(discounted) == 'Cart(items=1, total=90.00)'\n\n    class HalfOff:\n        def apply(self, subtotal: float) -> float:\n            return subtotal * 0.5\n\n    promo_cart = Cart(rule=HalfOff())\n    promo_cart.add(LineItem('BOOK', 40.0, 1))\n    assert promo_cart.total == 20.0\n",
+            "hints": [
+              "Do NOT make `PercentDiscount` inherit from `PricingRule`—defining `apply(self, subtotal: float) -> float` is enough for `@runtime_checkable Protocol`.",
+              "In `Cart.__repr__`, format the total to 2 decimal places using `f'Cart(items={len(self)}, total={self.total:.2f})'`.",
+              "In `LineItem.__post_init__`, check `if not self.sku.strip() or self.unit_price < 0 or self.qty <= 0: raise ValueError(...)`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-09-modules-typing-pytest",
+      "tech_slug": "python",
+      "title": "Modules, Modern Type Hints & `pytest` Mastery",
+      "subtitle": "Structure clean importable modules, enforce rich static contracts, and scale test suites with fixtures and parametrize.",
+      "difficulty": "intermediate",
+      "kind": "zybooks",
+      "estimated_minutes": 10,
+      "order_index": 9,
+      "prereq_module_id": "py-08-oop-dataclasses",
+      "summary": "Separate importable library code from CLI entry points with `if __name__ == \"__main__\":`, express precise contracts with `TypeVar`, `Literal`, `TypedDict`, and `Callable`, and write DRY `pytest` suites using `@pytest.fixture` and `@pytest.mark.parametrize`.",
+      "tags": ["python", "typing", "pytest", "modules", "zybooks"],
+      "external_resources": [
+        {"label": "Python typing Module Docs", "url": "https://docs.python.org/3/library/typing.html"},
+        {"label": "pytest Fixtures & Parametrize Guide", "url": "https://docs.pytest.org/en/stable/how-to/parametrize.html"}
+      ],
+      "sections": [
+        {
+          "title": "9.1 Importable Modules & `if __name__ == \"__main__\":`",
+          "body": "When Python imports `alerts.py`, it executes every top-level statement with `__name__ == \"alerts\"`. Only when you execute `python alerts.py` directly does `__name__` become `\"__main__\"`. Guarding CLI startup code inside `if __name__ == \"__main__\":` guarantees `pytest` and sibling modules can import your helpers cleanly with zero side effects.",
+          "code_example": "def format_banner(name: str) -> str:\n    return f\"[service] {name}\"\n\ndef main() -> None:\n    print(format_banner(\"alerts-cli\"))\n\nif __name__ == \"__main__\":\n    main()  # skipped when imported by pytest"
+        },
+        {
+          "title": "9.2 Modern Type Hints: `TypeVar`, `Literal`, `TypedDict` & `Callable`",
+          "body": "Beyond basic `int`/`str` hints, `typing` lets you describe real production contracts: `TypeVar(\"T\")` preserves element types through generic functions; `Literal[\"info\", \"warn\", \"critical\"]` constrains strings to a finite set; `TypedDict` types fixed-key JSON/dict records; and `Callable[[T], bool]` types callback predicates cleanly.",
+          "code_example": "from typing import Callable, Literal, TypedDict, TypeVar\n\nT = TypeVar(\"T\")\nSeverity = Literal[\"info\", \"warn\", \"critical\"]\n\nclass AlertRecord(TypedDict):\n    service: str\n    severity: Severity\n    message: str\n\ndef filter_items(items: list[T], pred: Callable[[T], bool]) -> list[T]:\n    return [item for item in items if pred(item)]"
+        },
+        {
+          "title": "9.3 `pytest` Fixtures & `@pytest.mark.parametrize`",
+          "body": "Decorate reusable test data or temporary resources with `@pytest.fixture` and inject them simply by naming them as test parameters. Pair fixtures with `@pytest.mark.parametrize(\"arg,expected\", [...])` to execute a single clean assertion body across dozens of input cases—each reported individually on failure.",
+          "code_example": "import pytest\n\n@pytest.fixture\ndef sample_scores() -> list[int]:\n    return [10, 45, 80, 95]\n\n@pytest.mark.parametrize(\"cutoff,expected\", [(0, 4), (50, 2), (99, 0)])\ndef test_passing_count(sample_scores, cutoff, expected):\n    assert sum(1 for s in sample_scores if s >= cutoff) == expected"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-09-read-check",
+          "title": "Participation Activity: Why Guard CLI Code with `__name__ == '__main__'`?",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "Why should CLI startup code in `billing.py` live inside `if __name__ == '__main__':` instead of running unconditionally at top level?",
+            "options": [
+              "Python raises a `SyntaxError` if functions are invoked at module top level",
+              "When `pytest` imports `billing`, `__name__` is `'billing'`, so the guard prevents CLI side effects from running during import",
+              "The guard disables runtime type checking inside `main()`",
+              "It forces Python to execute `billing.py` in a background process"
+            ],
+            "correct_index": 1,
+            "explanation": "On import, `__name__` equals the module's import name (`'billing'`), so code inside `if __name__ == '__main__':` only executes when run directly as a script.",
+            "hint": "Check what value `__name__` holds when a file is imported versus executed directly."
+          }
+        },
+        {
+          "id": "py-09-fill-blank",
+          "title": "Participation Activity: Wire Modern `typing` Constructs",
+          "activity_type": "fill_blank",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Fill in the four `typing` primitives (`TypeVar`, `Literal`, `TypedDict`, `Callable`) to complete the typed schema and generic helper.",
+            "template": "# Assume imports from typing are present\nT = ___(\"T\")\nLogLevel = ___[\"info\", \"warn\", \"error\"]\n\nclass MetricRow(___):\n    name: str\n    level: LogLevel\n\ndef first_match(items: list[T], pred: ___[[T], bool]) -> T | None:\n    return next((x for x in items if pred(x)), None)",
+            "blanks": [
+              {"accepted": ["TypeVar"], "hint": "Creates a generic type variable"},
+              {"accepted": ["Literal"], "hint": "Restricts values to specific constant strings"},
+              {"accepted": ["TypedDict"], "hint": "Base class for fixed-key typed dicts"},
+              {"accepted": ["Callable"], "hint": "Hint for a function taking [T] and returning bool"}
+            ],
+            "explanation": "`TypeVar` enables generics, `Literal` constrains allowed values, `TypedDict` types structured dicts, and `Callable[[T], bool]` types predicate functions."
+          }
+        },
+        {
+          "id": "py-09-parsons",
+          "title": "Participation Activity: Assemble a Fixture + Parametrized `pytest` Test",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Order these lines to define a `pytest` fixture `multiplier` and a `@pytest.mark.parametrize` test that consumes it.",
+            "lines": [
+              "def test_scale(multiplier, n, expected):",
+              "    return 10",
+              "@pytest.mark.parametrize(\"n,expected\", [(2, 20), (0, 0), (-3, -30)])",
+              "    assert result == expected",
+              "@pytest.fixture",
+              "    result = n * multiplier",
+              "def multiplier():"
+            ],
+            "correct_order": [4, 6, 1, 2, 0, 5, 3],
+            "valid_orders": [
+              [4, 6, 1, 2, 0, 5, 3],
+              [2, 0, 5, 3, 4, 6, 1]
+            ],
+            "explanation": "Decorate `multiplier()` with `@pytest.fixture` and `test_scale(...)` with `@pytest.mark.parametrize`, computing `result` before asserting."
+          }
+        },
+        {
+          "id": "py-09-nvim-lab",
+          "title": "Neovim Lab: Typed Alert Module & Parameterized `pytest` Suite",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 85,
+          "par_keystrokes": 155,
+          "spec": {
+            "primary_file": "alerts.py",
+            "instructions": "Complete BOTH starter files in this workspace (`alerts.py` and `test_alerts.py` — open the second buffer in Neovim with `:e test_alerts.py`):\n1. In `alerts.py`:\n   - Define `Severity = Literal['info', 'warn', 'critical']`, `T = TypeVar('T')`, and `class AlertRecord(TypedDict)` with keys `service: str`, `severity: Severity`, `message: str`.\n   - Implement `filter_items(items: list[T], predicate: Callable[[T], bool]) -> list[T]` preserving order.\n   - Implement `summarize_alerts(alerts: list[AlertRecord]) -> dict[Severity, int]` returning counts for all three keys `'info'`, `'warn'`, `'critical'` (defaulting to `0`).\n   - Guard the CLI entry point with `if __name__ == '__main__':` so importing `alerts` prints NOTHING, while running `python alerts.py` prints `alerts-cli-ready`.\n2. In `test_alerts.py`:\n   - Write a `@pytest.fixture` named `sample_alerts` returning at least 4 `AlertRecord` dicts covering all 3 severities.\n   - Write a `@pytest.mark.parametrize` test `test_filter_by_severity(sample_alerts, severity, expected_count)` with at least 3 cases verifying `filter_items` against each severity level.",
+            "starter_files": {
+              "alerts.py": "from __future__ import annotations\n\nfrom typing import Callable, Literal, TypedDict, TypeVar\n\nT = TypeVar(\"T\")\nSeverity = Literal[\"info\", \"warn\", \"critical\"]\n\n\nclass AlertRecord(TypedDict):\n    service: str\n    severity: Severity\n    message: str\n\n\ndef filter_items(items: list[T], predicate: Callable[[T], bool]) -> list[T]:\n    # TODO: return items where predicate(item) is True\n    raise NotImplementedError\n\n\ndef summarize_alerts(alerts: list[AlertRecord]) -> dict[Severity, int]:\n    # TODO: count alerts per severity ('info', 'warn', 'critical')\n    raise NotImplementedError\n\n\n# BUG: running print at module import time breaks clean imports!\nprint(\"alerts-cli-ready\")\n",
+              "test_alerts.py": "import pytest\nfrom alerts import AlertRecord, filter_items, summarize_alerts\n\n\n# TODO: add @pytest.fixture def sample_alerts() -> list[AlertRecord] with >= 4 alerts across info/warn/critical\n\n# TODO: add @pytest.mark.parametrize('severity,expected_count', [...]) def test_filter_by_severity(...)\n"
+            },
+            "test_code": "import ast\nimport os\nimport subprocess\nimport sys\nfrom pathlib import Path\nfrom typing import Literal, TypeVar, get_args, get_origin, get_type_hints\n\nimport alerts\n\nWS_DIR = Path(__file__).resolve().parent\n\n\ndef test_typing_contracts():\n    assert isinstance(alerts.T, TypeVar)\n    assert get_origin(alerts.Severity) is Literal\n    assert set(get_args(alerts.Severity)) == {'info', 'warn', 'critical'}\n    td_hints = get_type_hints(alerts.AlertRecord)\n    assert set(td_hints.keys()) == {'service', 'severity', 'message'}\n    fn_hints = get_type_hints(alerts.filter_items)\n    assert 'predicate' in fn_hints and 'return' in fn_hints\n\n\ndef test_filter_and_summarize_behavior():\n    rows: list[alerts.AlertRecord] = [\n        {'service': 'api', 'severity': 'info', 'message': 'booted'},\n        {'service': 'db', 'severity': 'critical', 'message': 'disk full'},\n        {'service': 'api', 'severity': 'warn', 'message': 'high latency'},\n        {'service': 'worker', 'severity': 'critical', 'message': 'oom'},\n    ]\n    crits = alerts.filter_items(rows, lambda r: r['severity'] == 'critical')\n    assert [r['service'] for r in crits] == ['db', 'worker']\n    assert alerts.filter_items([1, 2, 3, 4], lambda n: n % 2 == 0) == [2, 4]\n    assert alerts.summarize_alerts(rows) == {'info': 1, 'warn': 1, 'critical': 2}\n    assert alerts.summarize_alerts([]) == {'info': 0, 'warn': 0, 'critical': 0}\n\n\ndef test_main_guard_import_vs_script():\n    env = {**os.environ, 'PYTHONPATH': str(WS_DIR)}\n    imp = subprocess.run(\n        [sys.executable, '-c', 'import alerts'],\n        cwd=str(WS_DIR),\n        capture_output=True,\n        text=True,\n        env=env,\n        check=True,\n    )\n    assert imp.stdout.strip() == '', f'Importing alerts should print nothing, got: {imp.stdout!r}'\n\n    run = subprocess.run(\n        [sys.executable, str(WS_DIR / 'alerts.py')],\n        cwd=str(WS_DIR),\n        capture_output=True,\n        text=True,\n        env=env,\n        check=True,\n    )\n    assert run.stdout.strip() == 'alerts-cli-ready'\n\n\ndef test_learner_pytest_suite():\n    test_path = WS_DIR / 'test_alerts.py'\n    src = test_path.read_text(encoding='utf-8')\n    tree = ast.parse(src)\n\n    has_fixture = False\n    has_parametrize = False\n    for node in ast.walk(tree):\n        if isinstance(node, ast.FunctionDef):\n            decs = [ast.unparse(d) for d in node.decorator_list]\n            if node.name == 'sample_alerts' and any('fixture' in d for d in decs):\n                has_fixture = True\n            if node.name == 'test_filter_by_severity' and any('parametrize' in d for d in decs):\n                has_parametrize = True\n\n    assert has_fixture, 'Define @pytest.fixture def sample_alerts() in test_alerts.py'\n    assert has_parametrize, 'Define @pytest.mark.parametrize def test_filter_by_severity(...) in test_alerts.py'\n\n    env = {**os.environ, 'PYTHONPATH': str(WS_DIR)}\n    proc = subprocess.run(\n        [sys.executable, '-m', 'pytest', '-v', str(test_path)],\n        cwd=str(WS_DIR),\n        capture_output=True,\n        text=True,\n        env=env,\n    )\n    assert proc.returncode == 0, f'test_alerts.py failed:\\n{proc.stdout}\\n{proc.stderr}'\n    passed_lines = [ln for ln in proc.stdout.splitlines() if ' PASSED' in ln]\n    assert len(passed_lines) >= 3, f'Expected >= 3 parametrized test cases passing, got:\\n{proc.stdout}'\n",
+            "hints": [
+              "Wrap `print('alerts-cli-ready')` inside `if __name__ == '__main__':` at the bottom of `alerts.py`.",
+              "In `summarize_alerts`, initialize `counts: dict[Severity, int] = {'info': 0, 'warn': 0, 'critical': 0}` before looping.",
+              "In `test_alerts.py`, use `@pytest.fixture` on `sample_alerts` and `@pytest.mark.parametrize('severity,expected_count', [('info', ...), ('warn', ...), ('critical', ...)])` on `test_filter_by_severity`."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-10-iterators-itertools",
+      "tech_slug": "python",
+      "title": "Iterators, Generators (`yield from`), `itertools` & `functools`",
+      "subtitle": "Build custom lazy iterators, compose zero-copy itertools pipelines, and memoize cleanly with functools.",
+      "difficulty": "intermediate",
+      "kind": "zybooks",
+      "estimated_minutes": 10,
+      "order_index": 10,
+      "prereq_module_id": "py-09-modules-typing-pytest",
+      "summary": "Implement the `__iter__`/`__next__` iterator protocol by hand, delegate nested generators with `yield from`, build streaming pipelines with `itertools.chain`/`groupby`/`islice`, and apply `functools.lru_cache` and `functools.partial`.",
+      "tags": ["python", "iterators", "itertools", "functools", "zybooks"],
+      "external_resources": [
+        {"label": "Python itertools Docs", "url": "https://docs.python.org/3/library/itertools.html"},
+        {"label": "Python functools Docs", "url": "https://docs.python.org/3/library/functools.html"}
+      ],
+      "sections": [
+        {
+          "title": "10.1 The Iterator Protocol (`__iter__` / `__next__`) & `yield from`",
+          "body": "Every `for` loop calls `iter(obj)` (which invokes `__iter__`) and repeatedly calls `next(it)` (`__next__`) until `StopIteration` is raised. An iterator's `__iter__` returns `self`. When writing generators that delegate to another iterable or recursively flatten nested structures, `yield from sub_iter` forwards every yielded element cleanly without an inner loop.",
+          "code_example": "class CountUp:\n    def __init__(self, limit: int) -> None:\n        self.cur, self.limit = 0, limit\n    def __iter__(self):\n        return self\n    def __next__(self) -> int:\n        if self.cur >= self.limit:\n            raise StopIteration\n        self.cur += 1\n        return self.cur\n\ndef flatten(items):\n    for x in items:\n        if isinstance(x, list):\n            yield from flatten(x)\n        else:\n            yield x"
+        },
+        {
+          "title": "10.2 Streaming Pipelines with `itertools` (`chain`, `islice`, `groupby`)",
+          "body": "`itertools` offers C-speed, constant-memory building blocks: `chain.from_iterable(batches)` stitches multiple iterables without copying; `islice(stream, n)` slices lazy generators that do not support `stream[:n]`; and `groupby(data, key=...)` groups **consecutive** elements sharing the same key—remember to sort by the key first whenever matching records are not already adjacent.",
+          "code_example": "from itertools import chain, groupby, islice\n\nbatches = [[(\"a\", 10), (\"b\", 5)], [(\"a\", 30), (\"a\", 20)]]\nsorted_rows = sorted(chain.from_iterable(batches), key=lambda r: (r[0], -r[1]))\ntop2 = {\n    grp: [score for _, score in islice(rows, 2)]\n    for grp, rows in groupby(sorted_rows, key=lambda r: r[0])\n}\n# {'a': [30, 20], 'b': [5]}"
+        },
+        {
+          "title": "10.3 Memoization & Binding with `functools` (`lru_cache`, `partial`)",
+          "body": "`@functools.lru_cache(maxsize=128)` caches return values for pure functions with hashable arguments—turning exponential recursive calls like naive Fibonacci into O(n) lookups—and exposes `.cache_info()` and `.cache_clear()`. `functools.partial(fn, fixed_arg)` freezes positional or keyword arguments into a clean, inspectable callable without closure late-binding pitfalls.",
+          "code_example": "from functools import lru_cache, partial\n\n@lru_cache(maxsize=128)\ndef power_mod(base: int, exp: int, mod: int = 1000) -> int:\n    return pow(base, exp, mod)\n\nmod_100 = partial(power_mod, mod=100)\nassert mod_100(2, 10) == 24"
+        }
+      ],
+      "activities": [
+        {
+          "id": "py-10-read-check",
+          "title": "Participation Activity: The `itertools.groupby` Ordering Rule",
+          "activity_type": "read_check",
+          "grader_type": "browser",
+          "order_index": 0,
+          "xp_reward": 25,
+          "spec": {
+            "question": "Why does `[(k, list(g)) for k, g in itertools.groupby(['a', 'b', 'a'])]` produce THREE groups (`'a'`, `'b'`, `'a'`) instead of TWO?",
+            "options": [
+              "`groupby` cannot hash string keys and falls back to object identity",
+              "`groupby` only groups consecutive runs of identical keys, so unsorted inputs must be sorted by the key first to consolidate all matches",
+              "Calling `list(g)` mutates the source list during iteration",
+              "`groupby` caps each group to one element unless `maxsize` is set"
+            ],
+            "correct_index": 1,
+            "explanation": "`itertools.groupby` streams in O(1) memory by starting a new group every time the key changes, so non-adjacent duplicates stay separate unless you sort by the key first.",
+            "hint": "Think about how `groupby` achieves streaming behavior like Unix `uniq`."
+          }
+        },
+        {
+          "id": "py-10-code-trace",
+          "title": "Participation Activity: Trace `yield from`, `islice`, `chain` & `partial`",
+          "activity_type": "code_trace",
+          "grader_type": "browser",
+          "order_index": 1,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Trace the lazy generator stream across `islice`, `next`, `partial`, and final exhaustion.",
+            "code": [
+              "from functools import partial",
+              "from itertools import chain, islice",
+              "def emit_pairs(xs):",
+              "    for x in xs:",
+              "        yield from (x, x * 10)",
+              "pow3 = partial(pow, 3)",
+              "stream = emit_pairs(chain([1], [2, 3]))",
+              "first_three = list(islice(stream, 3))",
+              "nxt = next(stream)",
+              "p2 = pow3(2)",
+              "rest = list(stream)"
+            ],
+            "steps": [
+              {"line": 7, "note": "`chain([1], [2, 3])` feeds `1, 2, 3` lazily into `emit_pairs` -> yields `1, 10, 2, 20, 3, 30`."},
+              {"line": 8, "note": "`islice(stream, 3)` consumes the first 3 values (`1, 10, 2`) and pauses `stream`."},
+              {"line": 9, "note": "`next(stream)` resumes right where `islice` stopped and yields `20`."},
+              {"line": 10, "note": "`partial(pow, 3)(2)` calls `pow(3, 2)`."},
+              {"line": 11, "note": "`list(stream)` drains the remaining pair produced for `x = 3`."}
+            ],
+            "checkpoints": [
+              {
+                "id": "first_three",
+                "line": 8,
+                "label": "Value of `first_three`",
+                "expected": "[1, 10, 2]",
+                "accepted": ["[1, 10, 2]", "[1,10,2]"]
+              },
+              {"id": "nxt", "line": 9, "label": "Value of `nxt`", "expected": "20"},
+              {"id": "p2", "line": 10, "label": "Value of `p2`", "expected": "9"},
+              {
+                "id": "rest",
+                "line": 11,
+                "label": "Value of `rest`",
+                "expected": "[3, 30]",
+                "accepted": ["[3, 30]", "[3,30]"]
+              }
+            ],
+            "explanation": "`islice` advances the underlying generator (`[1, 10, 2]`), leaving `20` for `next(stream)` and `[3, 30]` for `list(stream)`; `partial(pow, 3)(2)` equals `9`."
+          }
+        },
+        {
+          "id": "py-10-parsons",
+          "title": "Participation Activity: Assemble a Recursive `yield from` Flattener",
+          "activity_type": "parsons",
+          "grader_type": "browser",
+          "order_index": 2,
+          "xp_reward": 25,
+          "spec": {
+            "prompt": "Order these lines to implement a recursive generator `flatten(items)` that delegates nested lists via `yield from`.",
+            "lines": [
+              "        else:",
+              "    for item in items:",
+              "            yield from flatten(item)",
+              "def flatten(items):",
+              "            yield item",
+              "        if isinstance(item, list):"
+            ],
+            "correct_order": [3, 1, 5, 2, 0, 4],
+            "valid_orders": [
+              [3, 1, 5, 2, 0, 4]
+            ],
+            "explanation": "Loop over `items`, recursively delegate nested `list`s with `yield from flatten(item)`, and `yield item` directly for leaf values."
+          }
+        },
+        {
+          "id": "py-10-nvim-lab",
+          "title": "Neovim Lab: Custom Iterator, `yield from` Flattener, `itertools` & `functools`",
+          "activity_type": "nvim_lab",
+          "grader_type": "python",
+          "order_index": 3,
+          "xp_reward": 85,
+          "par_keystrokes": 150,
+          "spec": {
+            "primary_file": "stream_kit.py",
+            "instructions": "Implement five utilities in `stream_kit.py`:\n1. `class Countdown`: custom iterator initialized with `start: int` (raise `ValueError` if `start < 0`). Implement `__iter__(self)` returning `self` and `__next__(self)` yielding `start, start - 1, ..., 1` and raising `StopIteration` afterward (`Countdown(0)` yields nothing).\n2. `def flatten_nested(tree: Iterable[Any]) -> Iterator[Any]`: lazy generator using `yield from` that recursively flattens nested `list` and `tuple` items while leaving `str` and `bytes` intact as leaves.\n3. `def top_n_by_group(batches: Iterable[Iterable[tuple[str, int]]], limit: int) -> dict[str, list[int]]`: combine `batches` with `itertools.chain.from_iterable`, sort by `(group, -score)`, group with `itertools.groupby`, and take at most `limit` scores per group via `itertools.islice` (raise `ValueError` if `limit < 0`).\n4. `@lru_cache(maxsize=128) def weighted_fib(n: int, scale: int = 1) -> int`: raise `ValueError` if `n < 0`; return `0` for `n == 0`, `scale` for `n == 1`, else `weighted_fib(n - 1, scale) + weighted_fib(n - 2, scale)`.\n5. `def make_scaler(scale: int) -> Callable[[int], int]`: return `functools.partial(weighted_fib, scale=scale)`.",
+            "starter_files": {
+              "stream_kit.py": "from __future__ import annotations\n\nfrom functools import lru_cache, partial\nfrom itertools import chain, groupby, islice\nfrom typing import Any, Callable, Iterable, Iterator\n\n\nclass Countdown:\n    def __init__(self, start: int) -> None:\n        # TODO: validate start >= 0 and store state\n        raise NotImplementedError\n\n    def __iter__(self) -> Countdown:\n        raise NotImplementedError\n\n    def __next__(self) -> int:\n        raise NotImplementedError\n\n\ndef flatten_nested(tree: Iterable[Any]) -> Iterator[Any]:\n    # TODO: lazy generator recursively flattening list/tuple with yield from\n    raise NotImplementedError\n    yield\n\n\ndef top_n_by_group(\n    batches: Iterable[Iterable[tuple[str, int]]],\n    limit: int,\n) -> dict[str, list[int]]:\n    # TODO: chain.from_iterable -> sort -> groupby -> islice\n    raise NotImplementedError\n\n\n@lru_cache(maxsize=128)\ndef weighted_fib(n: int, scale: int = 1) -> int:\n    # TODO: memoized scaled Fibonacci; raise ValueError if n < 0\n    raise NotImplementedError\n\n\ndef make_scaler(scale: int) -> Callable[[int], int]:\n    # TODO: return partial(weighted_fib, scale=scale)\n    raise NotImplementedError\n"
+            },
+            "test_code": "from functools import partial\nimport inspect\nimport time\nimport pytest\nfrom stream_kit import (\n    Countdown,\n    flatten_nested,\n    make_scaler,\n    top_n_by_group,\n    weighted_fib,\n)\n\n\ndef test_countdown_iterator_protocol():\n    cd = Countdown(4)\n    assert iter(cd) is cd\n    assert next(cd) == 4\n    assert list(cd) == [3, 2, 1]\n    with pytest.raises(StopIteration):\n        next(cd)\n    assert list(Countdown(0)) == []\n    with pytest.raises(ValueError):\n        Countdown(-1)\n\n\ndef test_flatten_nested_lazy_generator():\n    gen = flatten_nested([1, [2, (3, 4)], 'ab', [[], (5,)]])\n    assert inspect.isgenerator(gen)\n    assert next(gen) == 1\n    assert list(gen) == [2, 3, 4, 'ab', 5]\n    assert list(flatten_nested([])) == []\n\n\ndef test_top_n_by_group_itertools():\n    batches = [\n        [('py', 80), ('sql', 70), ('py', 95)],\n        [('sql', 90), ('py', 88), ('sql', 85), ('go', 60)],\n    ]\n    assert top_n_by_group(batches, 2) == {\n        'go': [60],\n        'py': [95, 88],\n        'sql': [90, 85],\n    }\n    assert top_n_by_group(batches, 0) == {'go': [], 'py': [], 'sql': []}\n    assert top_n_by_group([], 3) == {}\n    with pytest.raises(ValueError):\n        top_n_by_group(batches, -1)\n\n\ndef test_weighted_fib_lru_cache_and_partial():\n    weighted_fib.cache_clear()\n    t0 = time.perf_counter()\n    val = weighted_fib(35, 2)\n    elapsed = time.perf_counter() - t0\n    assert val == 18454930\n    assert elapsed < 0.2\n    info = weighted_fib.cache_info()\n    assert info.hits > 20\n\n    with pytest.raises(ValueError):\n        weighted_fib(-3)\n\n    triple = make_scaler(3)\n    assert isinstance(triple, partial)\n    assert triple(0) == 0\n    assert triple(1) == 3\n    assert triple(10) == 165\n",
+            "hints": [
+              "In `flatten_nested`, check `isinstance(item, (list, tuple))` so strings and bytes are yielded intact rather than split into characters.",
+              "In `top_n_by_group`, sort `chain.from_iterable(batches)` with `key=lambda r: (r[0], -r[1])` before passing to `groupby(..., key=lambda r: r[0])` and slicing each group with `islice(..., limit)`.",
+              "Keep `@lru_cache(maxsize=128)` directly on `weighted_fib`, and have `make_scaler(scale)` return `partial(weighted_fib, scale=scale)`."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -263,6 +263,34 @@ def moving_average(values, window):
     });
   }
 
+  // 9c. Verify Python 16-Chapter Beginning-to-End zyBooks Textbook Syllabus Roadmap on /tracks/python
+  await page.goto("/tracks/python");
+  await expect(page).toHaveURL(/\/tracks\/python$/);
+  await expect(page.getByTestId("syllabus-roadmap-python")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("track-progress-python")).toBeVisible();
+  await expect(page.getByTestId("continue-track-python")).toContainText(/Continue Next Chapter \(Ch\. \d+\)/);
+  await expect(page.getByTestId("syllabus-part-foundations")).toContainText("Part 1: Foundations (Beginner)");
+  await expect(page.getByTestId("syllabus-part-intermediate")).toContainText("Part 2: Intermediate & Katas");
+  await expect(page.getByTestId("syllabus-part-advanced")).toContainText("Part 3: Advanced & Async");
+  await expect(page.getByTestId("syllabus-part-boss")).toContainText("Part 4: Boss Projects");
+
+  const pySection = page.getByTestId("track-section-python");
+  const pyCards = pySection.locator(".track-module-card");
+  await expect(pyCards).toHaveCount(16);
+  for (let ch = 1; ch <= 16; ch++) {
+    await expect(pyCards.nth(ch - 1)).toContainText(`Ch. ${ch}`);
+  }
+
+  if (shotDir) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.mouse.move(10, 10);
+    await page.screenshot({
+      path: path.join(shotDir, "v2_python_16ch_syllabus.png"),
+      fullPage: false,
+      animations: "disabled",
+    });
+  }
+
   // 10. Verify Repo Mock Interviewer grades an answer and displays Readiness %
   await page.getByRole("button", { name: /repo interview prep/i }).click();
   await expect(page).toHaveURL(/\/repos$/);

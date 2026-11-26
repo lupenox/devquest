@@ -8,7 +8,8 @@
       "difficulty": "beginner",
       "kind": "zybooks",
       "estimated_minutes": 6,
-      "order_index": 1,
+      "order_index": 6,
+      "prereq_module_id": "py-05-strings-files-io",
       "summary": "Learn when to pick list comprehensions vs generator expressions, trace lazy evaluation step-by-step, and build a clean deduplication utility in Neovim.",
       "tags": ["python", "generators", "zybooks"],
       "external_resources": [
@@ -143,8 +144,8 @@
       "difficulty": "intermediate",
       "kind": "kata",
       "estimated_minutes": 8,
-      "order_index": 2,
-      "prereq_module_id": "python-comprehensions-101",
+      "order_index": 12,
+      "prereq_module_id": "py-04-data-structures",
       "summary": "Classic interview pattern: trade O(n) space in a dictionary for O(n) time lookup.",
       "tags": ["leetcode", "algorithms", "python"],
       "sections": [

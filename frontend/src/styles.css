@@ -7,6 +7,7 @@
 
 :root,
 [data-theme="frutiger-aero"] {
+  color-scheme: light;
   --bg: #88def7;
   --bg-glow: #c4f7d4;
   --bg-elev: rgba(255, 255, 255, 0.78);
@@ -15,6 +16,7 @@
   --bg-code: #072233;
   --bg-code-text: #d8f8ff;
   --bg-hover: rgba(255, 255, 255, 0.94);
+  --option-bg: #f0faff;
   --border: rgba(255, 255, 255, 0.85);
   --border-subtle: rgba(14, 116, 144, 0.2);
   --text: #0b2540;
@@ -37,6 +39,7 @@
 }
 
 [data-theme="emerald-3d"] {
+  color-scheme: dark;
   --bg: #041311;
   --bg-glow: #0b3a30;
   --bg-elev: rgba(9, 34, 29, 0.72);
@@ -45,6 +48,7 @@
   --bg-code: #030e0c;
   --bg-code-text: #d1fae5;
   --bg-hover: rgba(19, 68, 57, 0.85);
+  --option-bg: #09221d;
   --border: rgba(52, 211, 153, 0.25);
   --border-subtle: rgba(52, 211, 153, 0.14);
   --text: #ecfdf5;
@@ -66,6 +70,7 @@
 }
 
 [data-theme="tokyo-night"] {
+  color-scheme: dark;
   --bg: #0d111a;
   --bg-glow: #18223a;
   --bg-elev: #151b29;
@@ -74,6 +79,7 @@
   --bg-code: #0b0f17;
   --bg-code-text: #c9d7f5;
   --bg-hover: #202a42;
+  --option-bg: #151b29;
   --border: #2a3550;
   --border-subtle: #222c45;
   --text: #e6edf7;
@@ -95,6 +101,7 @@
 }
 
 [data-theme="catppuccin"] {
+  color-scheme: dark;
   --bg: #11111b;
   --bg-glow: #252038;
   --bg-elev: #181825;
@@ -103,6 +110,7 @@
   --bg-code: #11111b;
   --bg-code-text: #cdd6f4;
   --bg-hover: #313244;
+  --option-bg: #181825;
   --border: #313244;
   --border-subtle: #27273a;
   --text: #cdd6f4;
@@ -124,6 +132,7 @@
 }
 
 [data-theme="gruvbox"] {
+  color-scheme: dark;
   --bg: #1d2021;
   --bg-glow: #32302f;
   --bg-elev: #282828;
@@ -132,6 +141,7 @@
   --bg-code: #1d2021;
   --bg-code-text: #ebdbb2;
   --bg-hover: #3c3836;
+  --option-bg: #282828;
   --border: #504945;
   --border-subtle: #3c3836;
   --text: #ebdbb2;
@@ -153,6 +163,7 @@
 }
 
 [data-theme="kanagawa"] {
+  color-scheme: dark;
   --bg: #16161d;
   --bg-glow: #2a2a37;
   --bg-elev: #1f1f28;
@@ -161,6 +172,7 @@
   --bg-code: #16161d;
   --bg-code-text: #dcd7ba;
   --bg-hover: #363646;
+  --option-bg: #1f1f28;
   --border: #363646;
   --border-subtle: #2a2a37;
   --text: #dcd7ba;
@@ -328,9 +340,24 @@ code, pre {
   outline: none;
 }
 
+select,
+.select-field,
+.theme-select {
+  color: var(--text);
+}
+
+select option,
+.select-field option,
 .theme-select option {
-  background: #141c2b;
-  color: #e6edf7;
+  background-color: var(--option-bg, var(--bg-elev));
+  color: var(--text);
+}
+
+select option:checked,
+.select-field option:checked,
+.theme-select option:checked {
+  background-color: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .level-badge {
@@ -770,11 +797,19 @@ code, pre {
 .input-field, .select-field {
   background: var(--bg-code);
   border: 1px solid var(--border);
-  color: var(--bg-code-text);
+  color: var(--text);
   border-radius: 8px;
   padding: 8px 11px;
   font-size: 0.9rem;
   width: 100%;
+}
+
+.input-field:focus,
+.select-field:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.2);
 }
 
 .parsons-row {
@@ -1537,15 +1572,42 @@ code, pre {
 }
 
 [data-theme="frutiger-aero"] .input-field,
+[data-theme="frutiger-aero"] select,
 [data-theme="frutiger-aero"] .select-field {
-  background: rgba(255, 255, 255, 0.92);
-  color: #0b2540;
-  border: 1px solid rgba(2, 132, 199, 0.32);
+  background-color: rgba(255, 255, 255, 0.88);
+  color: #0c2438;
+  border: 1px solid rgba(2, 132, 199, 0.34);
+  color-scheme: light;
 }
 
+[data-theme="frutiger-aero"] .theme-select {
+  color: #0c2438;
+  background-color: transparent;
+  border: none;
+  color-scheme: light;
+}
+
+[data-theme="frutiger-aero"] .input-field:focus,
+[data-theme="frutiger-aero"] select:focus,
+[data-theme="frutiger-aero"] .select-field:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.22);
+}
+
+[data-theme="frutiger-aero"] select option,
+[data-theme="frutiger-aero"] .select-field option,
 [data-theme="frutiger-aero"] .theme-select option {
-  background: #f0fbff;
-  color: #0b2540;
+  background-color: #f0faff;
+  color: #0c2438;
+}
+
+[data-theme="frutiger-aero"] select option:checked,
+[data-theme="frutiger-aero"] select option:hover,
+[data-theme="frutiger-aero"] .select-field option:checked,
+[data-theme="frutiger-aero"] .theme-select option:checked {
+  background-color: #bae6fd;
+  color: #082032;
 }
 
 [data-theme="frutiger-aero"] .kbd {

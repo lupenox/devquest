@@ -1,0 +1,67 @@
+.card.repo-browser { padding: 0; overflow: hidden; }
+.repo-browser[open] > summary .library-chevron { transform: rotate(180deg); }
+
+.repo-browser-content {
+  padding: 0 clamp(.85rem, 2.2vw, 1.45rem) 1rem;
+}
+
+.repo-browser-filter {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem .7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: .5rem;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.repo-browser-filter:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.repo-browser-filter input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: .9rem;
+  border: 0;
+  outline: 0;
+}
+
+.repo-browser-filter input::placeholder { color: var(--text-muted); }
+.repo-browser-list { margin: .45rem 0 0; padding: 0; list-style: none; }
+
+.repo-browser-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  padding: .7rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.repo-browser-entry { flex: 1 1 18rem; min-width: 0; overflow-wrap: anywhere; }
+.repo-browser-entry a { color: var(--text); text-underline-offset: .15em; font-weight: 650; }
+.repo-browser-entry svg { vertical-align: middle; }
+.repo-browser-entry p { margin: .25rem 0 0; font-size: .85rem; color: var(--text-muted); }
+
+.repo-browser-meta, .repo-browser-footer, .repo-browser-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem .8rem;
+}
+
+.repo-browser-meta, .repo-browser-footer, .repo-browser-empty {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+
+.repo-browser-meta { margin-top: .2rem; }
+.repo-browser-footer { justify-content: space-between; margin-top: .65rem; }
+.repo-browser-empty { margin: .6rem 0 0; }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -246,14 +247,18 @@ def load_curriculum_files(db_path: Path | None = None, curriculum_dir: Path | No
     cdir = curriculum_dir or config.CURRICULUM_DIR
     if not cdir.exists():
         return 0
+    skip_generated = os.getenv("DEVQUEST_SKIP_GENERATED_CURRICULUM") == "1"
     loaded = 0
     with get_conn(db_path) as conn:
         for path in sorted(cdir.rglob("*.json")):
+            is_generated = "generated" in path.relative_to(cdir).parts
+            if skip_generated and is_generated:
+                continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
                 continue
-            source = "generated" if "generated" in path.parts else "builtin"
+            source = "generated" if is_generated else "builtin"
             modules = data.get("modules") if isinstance(data, dict) else (data if isinstance(data, list) else [])
             if isinstance(data, dict) and "id" in data and "tech_slug" in data:
                 modules = [data]

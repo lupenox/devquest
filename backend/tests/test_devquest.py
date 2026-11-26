@@ -23,6 +23,7 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(config, "DB_PATH", db_path)
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "WORKSPACES_DIR", ws_dir)
+    monkeypatch.setenv("DEVQUEST_SKIP_GENERATED_CURRICULUM", "1")
     init_db(db_path=db_path)
     return db_path, ws_dir
 
@@ -569,6 +570,7 @@ def test_non_destructive_v1_schema_migration(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(config, "DB_PATH", v1_db)
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "WORKSPACES_DIR", ws_dir)
+    monkeypatch.setenv("DEVQUEST_SKIP_GENERATED_CURRICULUM", "1")
 
     # Create a genuine v1 schema (WITHOUT achievements, sprint_sessions, mock_interviews)
     conn = sqlite3.connect(str(v1_db))

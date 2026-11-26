@@ -119,6 +119,28 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   await switcher.selectOption("frutiger-aero");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
 
+  // 3b. Verify Frutiger Aero color-scheme: light and high-contrast <select>/<option> colors
+  const themeColors = await page.evaluate(() => {
+    const htmlCs = getComputedStyle(document.documentElement).colorScheme;
+    const sel = document.querySelector<HTMLSelectElement>('[data-testid="theme-switcher"]')!;
+    const checkedOpt = sel.querySelectorAll("option")[0]!;
+    const uncheckedOpt = sel.querySelectorAll("option")[1]!;
+    return {
+      htmlCs,
+      selColor: getComputedStyle(sel).color,
+      checkedColor: getComputedStyle(checkedOpt).color,
+      checkedBg: getComputedStyle(checkedOpt).backgroundColor,
+      uncheckedColor: getComputedStyle(uncheckedOpt).color,
+      uncheckedBg: getComputedStyle(uncheckedOpt).backgroundColor,
+    };
+  });
+  expect(themeColors.htmlCs).toBe("light");
+  expect(themeColors.selColor).toBe("rgb(12, 36, 56)");
+  expect(themeColors.checkedColor).toBe("rgb(8, 32, 50)");
+  expect(themeColors.checkedBg).toBe("rgb(186, 230, 253)");
+  expect(themeColors.uncheckedColor).toBe("rgb(12, 36, 56)");
+  expect(themeColors.uncheckedBg).toBe("rgb(240, 250, 255)");
+
   // 4. Ctrl+K Command Palette search for "pdb" -> /modules/debugging-pdb-101 + reload via SPA fallback!
   await page.keyboard.press("Control+k");
   await expect(page.getByTestId("command-palette")).toBeVisible();
@@ -271,9 +293,40 @@ def moving_average(values, window):
   // 10. Verify Repo Mock Interviewer grades an answer and displays Readiness %
   await page.getByRole("button", { name: /repo interview prep/i }).click();
   await expect(page).toHaveURL(/\/repos$/);
-  await expect(page.getByText("Study Any GitHub Repo for Interviews")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Repo interview prep", exact: true })).toBeVisible();
 
-  await page.getByPlaceholder("owner/repo or https://github.com/owner/repo").fill("lupenox/devquest");
+  // Also verify .select-field option contrast inside Model settings under Frutiger Aero
+  const modelSettings = page.locator("details").filter({ has: page.locator("summary", { hasText: /Model settings/i }) });
+  await modelSettings.locator("summary").click();
+  const modelSelectColors = await modelSettings.locator("select.select-field").evaluate((sel) => {
+    const opt = sel.querySelector("option");
+    return {
+      colorScheme: getComputedStyle(sel).colorScheme,
+      selColor: getComputedStyle(sel).color,
+      selBg: getComputedStyle(sel).backgroundColor,
+      optColor: opt ? getComputedStyle(opt).color : null,
+      optBg: opt ? getComputedStyle(opt).backgroundColor : null,
+    };
+  });
+  expect(modelSelectColors.colorScheme).toBe("light");
+  expect(modelSelectColors.selColor).toBe("rgb(12, 36, 56)");
+  if (modelSelectColors.optColor) {
+    expect(["rgb(12, 36, 56)", "rgb(8, 32, 50)"]).toContain(modelSelectColors.optColor);
+    expect(["rgb(240, 250, 255)", "rgb(186, 230, 253)"]).toContain(modelSelectColors.optBg);
+  }
+  await modelSettings.locator("summary").click();
+
+  if (shotDir) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.mouse.move(10, 10);
+    await page.screenshot({
+      path: path.join(shotDir, "v2_repo_prep_frutiger.png"),
+      fullPage: false,
+      animations: "disabled",
+    });
+  }
+
+  await page.getByRole("textbox", { name: "Repository", exact: true }).fill("lupenox/devquest");
   await page.getByTestId("custom-start-mock-interview").click();
   await expect(page.getByTestId("mock-interview-panel")).toBeVisible({ timeout: 20000 });
   await expect(page.getByTestId("mock-interview-question")).toBeVisible();

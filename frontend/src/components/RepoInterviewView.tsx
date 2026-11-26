@@ -1,16 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Award,
   BookOpen,
   CheckCircle2,
-  FolderGit2,
-  Lock,
+  ChevronDown,
+  GitBranch,
   MessageSquareCode,
-  Play,
   RefreshCw,
   RotateCcw,
-  Search,
   Send,
+  SlidersHorizontal,
   Sparkles,
   X,
 } from "lucide-react";
@@ -26,28 +25,17 @@ import type {
   ModuleSummary,
   OllamaModel,
 } from "../types";
+import { RepoBrowser } from "./RepoBrowser";
+import { RepoPracticeLibrary } from "./RepoPracticeLibrary";
 import "../labs.css";
+import "../dashboard-library.css";
+import "../repo-prep.css";
+
+export { extractRepoFromModule } from "../repoReference";
 
 interface Props {
   onOpenModule: (moduleId: string) => void;
   onUpdated: () => void;
-}
-
-export function extractRepoFromModule(
-  mod: Pick<ModuleSummary, "id" | "title" | "content">
-): string {
-  const prefix = "Interview Prep:";
-  if (mod.title.startsWith(prefix)) {
-    return mod.title.slice(prefix.length).trim();
-  }
-  const ghResource = mod.content?.external_resources?.find((r) =>
-    r.url.includes("github.com/")
-  );
-  if (ghResource) {
-    const m = ghResource.url.match(/github\.com\/([^/\s]+\/[^/\s#?]+)/i);
-    if (m?.[1]) return m[1].replace(/\.git$/i, "");
-  }
-  return mod.id.replace(/^repo-interview-/, "");
 }
 
 function readinessClass(score: number): string {
@@ -60,6 +48,14 @@ function rubricBarColor(score: number): string {
   if (score >= 20) return "#22c55e";
   if (score >= 14) return "var(--accent, #7aa2f7)";
   return "var(--amber, #e0af68)";
+}
+
+function normalizeInterviews(items: MockInterviewSummary[] | undefined): MockInterviewSummary[] {
+  return (items || []).map((item) => ({
+    ...item,
+    created_at: typeof item.created_at === "string" ? item.created_at : "",
+    updated_at: typeof item.updated_at === "string" ? item.updated_at : "",
+  }));
 }
 
 interface TurnHistoryItem {
@@ -182,9 +178,9 @@ export function MockInterviewPanel({
   return (
     <div className="mock-panel" data-testid="mock-interview-panel">
       <div className="mock-header">
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <MessageSquareCode size={19} color="#bb9af7" />
+            <MessageSquareCode size={19} style={{ color: "var(--accent)", flexShrink: 0 }} aria-hidden="true" />
             <strong style={{ fontSize: "1.02rem" }}>
               Staff-Engineer Mock Interview — {session.repo_full_name}
             </strong>
@@ -196,7 +192,7 @@ export function MockInterviewPanel({
                 className={`readiness-badge ${readinessClass(displayReadiness)}`}
                 data-testid="mock-interview-readiness"
               >
-                <Award size={12} /> Readiness {displayReadiness}%
+                <Award size={12} aria-hidden="true" /> Readiness {displayReadiness}%
               </span>
             )}
           </div>
@@ -204,17 +200,17 @@ export function MockInterviewPanel({
             Grounded in real repo architecture, files &amp; trade-offs • 4-axis Staff rubric (Clarity, Technical Accuracy, Code References, Trade-Offs)
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="mock-header-actions">
           <button
             type="button"
             className="btn btn-sm"
             onClick={() => onRestart(session.repo_full_name)}
             disabled={submitting}
           >
-            <RotateCcw size={13} /> Restart
+            <RotateCcw size={13} aria-hidden="true" /> Restart
           </button>
           <button type="button" className="btn btn-sm" onClick={onClose} aria-label="Close mock interview">
-            <X size={14} /> Close
+            <X size={14} aria-hidden="true" /> Close
           </button>
         </div>
       </div>
@@ -288,7 +284,7 @@ export function MockInterviewPanel({
       {!completed && currentQuestion && (
         <form onSubmit={submitAnswer} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="mock-question-card" data-testid="mock-interview-question">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
               <span className="badge badge-kind">
                 Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}
               </span>
@@ -324,7 +320,7 @@ export function MockInterviewPanel({
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div className="mock-submit-row">
             <span className="muted" style={{ fontSize: "0.78rem" }}>
               Tip: Cite specific filenames, routes/functions, edge cases &amp; trade-offs to score 20+/25 per axis.
             </span>
@@ -334,7 +330,7 @@ export function MockInterviewPanel({
               disabled={!answer.trim() || submitting}
               data-testid="mock-interview-submit"
             >
-              <Send size={14} /> {submitting ? "Grading Answer..." : "Submit Answer"}
+              <Send size={14} aria-hidden="true" /> {submitting ? "Grading Answer..." : "Submit Answer"}
             </button>
           </div>
         </form>
@@ -344,14 +340,14 @@ export function MockInterviewPanel({
       {completed && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-testid="mock-interview-summary">
           <div className="mock-summary-banner">
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div className="mock-score-circle">
                 <span style={{ fontSize: "1.35rem", lineHeight: 1 }}>{displayReadiness}%</span>
                 <span style={{ fontSize: "0.62rem", textTransform: "uppercase", color: "#86efac" }}>
                   Ready
                 </span>
               </div>
-              <div>
+              <div style={{ minWidth: 0, flex: "1 1 12rem" }}>
                 <h4 style={{ margin: "0 0 4px", fontSize: "1.05rem" }}>
                   Interview Readiness Summary — {session.repo_full_name}
                 </h4>
@@ -374,7 +370,7 @@ export function MockInterviewPanel({
               className="btn btn-primary"
               onClick={() => onRestart(session.repo_full_name)}
             >
-              <RotateCcw size={14} /> Practice Another Round
+              <RotateCcw size={14} aria-hidden="true" /> Practice Another Round
             </button>
           </div>
 
@@ -408,6 +404,7 @@ export function MockInterviewPanel({
 export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
   const [status, setStatus] = useState<GitHubStatus | null>(null);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(true);
   const [packs, setPacks] = useState<ModuleSummary[]>([]);
   const [interviews, setInterviews] = useState<MockInterviewSummary[]>([]);
   const [models, setModels] = useState<OllamaModel[]>([]);
@@ -415,56 +412,75 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
   const [usernameInput, setUsernameInput] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [customRepo, setCustomRepo] = useState("");
-  const [filter, setFilter] = useState("");
   const [useOllama, setUseOllama] = useState(false);
   const [selectedModel, setSelectedModel] = useState("");
 
   const [busyRepo, setBusyRepo] = useState<string | null>(null);
   const [startingMockRepo, setStartingMockRepo] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<MockInterviewStartResp | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const repoInputRef = useRef<HTMLInputElement>(null);
+
   const loadInterviews = async () => {
     try {
       const iv = await api.interviews();
-      setInterviews(iv.interviews || []);
+      setInterviews(normalizeInterviews(iv.interviews));
     } catch {
       // keep existing state if interviews endpoint unavailable
     }
   };
 
-  const loadAll = async () => {
-    try {
-      const [st, pk, ol, iv] = await Promise.all([
-        api.githubStatus(),
-        api.githubStudyPacks(),
-        api.ollamaModels(),
-        api.interviews().catch(() => ({ interviews: [] as MockInterviewSummary[] })),
-      ]);
-      setStatus(st);
-      setPacks(pk.packs);
-      setModels(ol.models);
-      setInterviews(iv.interviews || []);
-      if (ol.models.length > 0 && !selectedModel) {
-        setSelectedModel(ol.models[0].name);
-      }
-      if (st.username) {
-        setUsernameInput(st.username);
-        const r = await api.githubRepos();
-        setRepos(r.repos);
-      }
-    } catch (e: any) {
-      setError(e?.message || "Failed to load GitHub data");
-    }
-  };
-
   useEffect(() => {
-    loadAll();
+    let active = true;
+    const loadAll = async () => {
+      setLoadingRepos(true);
+      try {
+        const [st, pk, ol, iv] = await Promise.all([
+          api.githubStatus(),
+          api.githubStudyPacks(),
+          api.ollamaModels(),
+          api.interviews().catch(() => ({ interviews: [] as MockInterviewSummary[] })),
+        ]);
+        if (!active) return;
+
+        setStatus(st);
+        setPacks(pk.packs || []);
+        setModels(ol.models || []);
+        setInterviews(normalizeInterviews(iv.interviews));
+        if (ol.models && ol.models.length > 0) {
+          setSelectedModel((prev) =>
+            prev && ol.models.some((m) => m.name === prev) ? prev : ol.models[0].name
+          );
+        }
+        if (st.username) {
+          setUsernameInput(st.username);
+        }
+        if (st.username || st.connected) {
+          try {
+            const r = await api.githubRepos();
+            if (active) setRepos(r.repos || []);
+          } catch (repoErr: any) {
+            if (active) setError(repoErr?.message || "Failed to load GitHub repositories");
+          }
+        } else {
+          setRepos([]);
+        }
+      } catch (e: any) {
+        if (active) setError(e?.message || "Failed to load GitHub data");
+      } finally {
+        if (active) setLoadingRepos(false);
+      }
+    };
+    void loadAll();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Index best persisted readiness score by normalized repo name & module_id
   const readinessByRepo = useMemo(() => {
     const map = new Map<string, MockInterviewSummary>();
     for (const iv of interviews) {
@@ -485,17 +501,26 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
+    setConnecting(true);
     setError(null);
     setMessage(null);
     try {
       const st = await api.githubConnect(usernameInput, tokenInput || undefined);
       setStatus(st);
       setTokenInput("");
+      setLoadingRepos(true);
       const r = await api.githubRepos(st.connected ? undefined : usernameInput);
-      setRepos(r.repos);
-      setMessage(st.connected ? `Connected to GitHub as ${st.username} (${st.auth_source})` : "Saved GitHub handle.");
+      setRepos(r.repos || []);
+      setMessage(
+        st.connected
+          ? `Connected to GitHub as ${st.username} (${st.auth_source})`
+          : "Saved GitHub handle."
+      );
     } catch (err: any) {
       setError(err?.message || "GitHub connection failed");
+    } finally {
+      setConnecting(false);
+      setLoadingRepos(false);
     }
   };
 
@@ -519,21 +544,25 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
   };
 
   const analyzeRepo = async (repoRef: string) => {
-    if (!repoRef.trim()) return;
-    setBusyRepo(repoRef);
+    const clean = repoRef.trim();
+    if (!clean) return;
+    setBusyRepo(clean);
     setError(null);
     setMessage(
       useOllama
-        ? `Inspecting ${repoRef} and generating Staff-Engineer interview grill questions via Ollama...`
-        : `Inspecting ${repoRef} architecture, entrypoints, symbols & building interview study pack...`
+        ? `Inspecting ${clean} and generating Staff-Engineer study pack via Ollama...`
+        : `Inspecting ${clean} architecture, entrypoints & building interview study pack...`
     );
     try {
-      const res = await api.githubAnalyze(repoRef.trim(), useOllama, selectedModel || undefined);
+      const res = await api.githubAnalyze(
+        clean,
+        useOllama,
+        useOllama ? selectedModel || undefined : undefined
+      );
       onUpdated();
-      await loadAll();
       onOpenModule(res.module.id);
     } catch (err: any) {
-      setError(err?.message || `Failed to analyze ${repoRef}`);
+      setError(err?.message || `Failed to analyze ${clean}`);
     } finally {
       setBusyRepo(null);
     }
@@ -546,7 +575,10 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
     setError(null);
     setMessage(null);
     try {
-      const session = await api.interviewStart(clean, selectedModel || undefined);
+      const session = await api.interviewStart(
+        clean,
+        useOllama ? selectedModel || undefined : undefined
+      );
       setActiveSession(session);
       await loadInterviews();
     } catch (err: any) {
@@ -556,20 +588,22 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
     }
   };
 
-  const filteredRepos = repos.filter(
-    (r) =>
-      r.full_name.toLowerCase().includes(filter.toLowerCase()) ||
-      r.description.toLowerCase().includes(filter.toLowerCase()) ||
-      r.language.toLowerCase().includes(filter.toLowerCase())
-  );
+  const handleChooseRepo = (fullName: string) => {
+    setCustomRepo(fullName);
+    setError(null);
+    repoInputRef.current?.focus();
+  };
+
+  const isBusy = Boolean(busyRepo) || Boolean(startingMockRepo);
+  const trimmedRepo = customRepo.trim();
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div className="repo-prep">
       {/* Live Conversational Staff-Engineer Mock Interviewer */}
       {activeSession && (
         <MockInterviewPanel
           session={activeSession}
-          selectedModel={selectedModel || undefined}
+          selectedModel={useOllama ? selectedModel || undefined : undefined}
           onClose={() => setActiveSession(null)}
           onSessionUpdated={() => {
             void loadInterviews();
@@ -579,291 +613,233 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
         />
       )}
 
-      {/* GitHub Connector + Manual Repo Analyzer & Mock Interview Launcher */}
-      <div className="grid-2">
-        <div className="card">
-          <h3 className="card-title">
-            <FolderGit2 size={18} color="#7aa2f7" /> GitHub Connector
-          </h3>
-          {status?.connected ? (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <CheckCircle2 size={16} color="#22c55e" />
-                  <strong>{status.name || status.username}</strong>
-                  <span className="badge badge-done">@{status.username}</span>
-                  <span className="badge badge-kind">{status.auth_source}</span>
-                </div>
-                <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
-                  {status.public_repos ?? 0} public • {status.private_repos ?? 0} private repos accessible
-                </div>
-              </div>
-              <button type="button" className="btn btn-sm" onClick={handleSyncXp} disabled={syncing}>
-                <RefreshCw size={13} /> {syncing ? "Syncing..." : "Sync XP"}
-              </button>
-            </div>
-          ) : (
-            <p className="muted" style={{ marginTop: 0, fontSize: "0.85rem" }}>
-              DevQuest automatically uses your local <code>gh</code> CLI login, or enter a GitHub username / optional Personal Access Token below.
-            </p>
+      {/* Focused Primary Repo Interview Prep Card */}
+      <section className="card repo-prep-hero" aria-labelledby="repo-prep-heading">
+        <div className="repo-prep-eyebrow">
+          <span className="repo-prep-eyebrow-label">
+            <Sparkles size={15} aria-hidden="true" />
+            <span>Codebase defense &amp; mock interviews</span>
+          </span>
+          {status?.connected && status.username && (
+            <span className="badge badge-done">@{status.username}</span>
           )}
-
-          <form onSubmit={handleConnect} style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input
-                className="input-field"
-                style={{ flex: "1 1 150px" }}
-                placeholder="GitHub username (e.g. lupenox)"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-              />
-              <input
-                className="input-field"
-                style={{ flex: "1 1 170px" }}
-                type="password"
-                placeholder="Optional PAT (leave blank to use gh CLI)"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary btn-sm">
-                Connect
-              </button>
-            </div>
-          </form>
         </div>
 
-        <div className="card">
-          <h3 className="card-title">
-            <Sparkles size={18} color="#bb9af7" /> Study Any GitHub Repo for Interviews
-          </h3>
-          <p className="muted" style={{ marginTop: 0, fontSize: "0.85rem" }}>
-            Paste any <code>owner/repo</code> or GitHub URL to build an interactive study pack or launch a live 4-question Staff-Engineer Mock Interview.
-          </p>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <h2 id="repo-prep-heading">Repo interview prep</h2>
+        <p className="repo-prep-lead">
+          Paste any <code>owner/repo</code> or GitHub URL—or pick one from your connected repositories below—to build a study pack or run a 4-question Staff-Engineer mock interview.
+        </p>
+
+        <form
+          className="repo-prep-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void analyzeRepo(customRepo);
+          }}
+        >
+          <div className="repo-field">
+            <label htmlFor="repo-target-input">Repository</label>
             <input
+              ref={repoInputRef}
+              id="repo-target-input"
+              type="text"
               className="input-field"
-              style={{ flex: "1 1 200px" }}
               placeholder="owner/repo or https://github.com/owner/repo"
               value={customRepo}
               onChange={(e) => setCustomRepo(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
+          </div>
+
+          <div className="repo-prep-actions">
             <button
-              type="button"
+              type="submit"
               className="btn btn-primary"
-              disabled={!customRepo.trim() || Boolean(busyRepo) || Boolean(startingMockRepo)}
-              onClick={() => analyzeRepo(customRepo)}
+              disabled={!trimmedRepo || isBusy}
             >
-              {busyRepo === customRepo ? "Analyzing..." : "Build Study Pack"}
+              <BookOpen size={15} aria-hidden="true" />
+              {busyRepo ? "Building study pack…" : "Build study pack"}
             </button>
             <button
               type="button"
               className="btn btn-konsole"
-              disabled={!customRepo.trim() || Boolean(busyRepo) || Boolean(startingMockRepo)}
-              onClick={() => startMockInterview(customRepo)}
+              disabled={!trimmedRepo || isBusy}
+              onClick={() => void startMockInterview(customRepo)}
               data-testid="custom-start-mock-interview"
             >
-              <MessageSquareCode size={14} />
-              {startingMockRepo === customRepo.trim() ? "Starting..." : "Start Mock Interview"}
+              <MessageSquareCode size={15} aria-hidden="true" />
+              {startingMockRepo === trimmedRepo && trimmedRepo
+                ? "Starting interview…"
+                : "Start mock interview"}
             </button>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.84rem", cursor: "pointer", flexWrap: "wrap" }}>
+        </form>
+      </section>
+
+      {message && (
+        <div className="feedback-box ok repo-prep-feedback" role="status">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="feedback-box err repo-prep-feedback" role="alert">
+          {error}
+        </div>
+      )}
+
+      {/* Saved Study Packs & Collapsible Interview History */}
+      <RepoPracticeLibrary
+        packs={packs}
+        interviews={interviews}
+        readinessByRepo={readinessByRepo}
+        onOpenModule={onOpenModule}
+        onStart={(repo) => void startMockInterview(repo)}
+        busy={isBusy}
+      />
+
+      {/* Collapsible Connected GitHub Repositories Browser */}
+      <RepoBrowser
+        repos={repos}
+        readinessByRepo={readinessByRepo}
+        onChoose={handleChooseRepo}
+        loading={loadingRepos}
+      />
+
+      {/* Collapsible GitHub Connection Settings */}
+      <details className="card repo-disclosure" data-testid="github-connection">
+        <summary className="library-summary">
+          <GitBranch size={17} aria-hidden="true" />
+          <strong>GitHub connection</strong>
+          <span className="library-count">
+            {status?.connected
+              ? `@${status.username}`
+              : status?.username
+              ? `@${status.username}`
+              : "Not connected"}
+          </span>
+          <ChevronDown size={16} className="library-chevron" aria-hidden="true" />
+        </summary>
+        <div className="repo-disclosure-body">
+          <div className="repo-connection-status">
+            <div className="repo-connection-meta">
+              {status?.connected ? (
+                <>
+                  <div className="repo-connection-identity">
+                    <CheckCircle2 size={15} className="repo-connected-icon" aria-hidden="true" />
+                    <strong>{status.name || status.username}</strong>
+                    <span className="badge badge-done">@{status.username}</span>
+                    <span className="badge badge-kind">{status.auth_source}</span>
+                  </div>
+                  <p className="muted repo-connection-note">
+                    {status.public_repos ?? 0} public · {status.private_repos ?? 0} private repos accessible
+                  </p>
+                </>
+              ) : (
+                <p className="muted repo-connection-note">
+                  DevQuest automatically uses your local <code>gh</code> CLI login, or connect with a username and optional Personal Access Token below.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={handleSyncXp}
+              disabled={syncing || (!status?.connected && !status?.username)}
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              {syncing ? "Syncing…" : "Sync XP"}
+            </button>
+          </div>
+
+          <form className="repo-connect-form" onSubmit={handleConnect}>
+            <div className="repo-field">
+              <label htmlFor="github-username-input">GitHub username</label>
+              <input
+                id="github-username-input"
+                type="text"
+                className="input-field"
+                placeholder="e.g. lupenox"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+            <div className="repo-field">
+              <label htmlFor="github-token-input">Personal access token (optional)</label>
+              <input
+                id="github-token-input"
+                type="password"
+                className="input-field"
+                placeholder="Leave blank to use gh CLI"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <div className="repo-connect-actions">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={connecting}>
+                {connecting ? "Connecting…" : "Connect"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </details>
+
+      {/* Collapsible Local Ollama Model Settings */}
+      <details className="card repo-disclosure" data-testid="model-settings">
+        <summary className="library-summary">
+          <SlidersHorizontal size={17} aria-hidden="true" />
+          <strong>Model settings</strong>
+          <span className="library-count">
+            {useOllama && selectedModel
+              ? selectedModel
+              : models.length > 0
+              ? "Built-in"
+              : "Offline"}
+          </span>
+          <ChevronDown size={16} className="library-chevron" aria-hidden="true" />
+        </summary>
+        <div className="repo-disclosure-body">
+          <label className="repo-checkbox-row" htmlFor="repo-use-ollama">
             <input
+              id="repo-use-ollama"
               type="checkbox"
               checked={useOllama}
               onChange={(e) => setUseOllama(e.target.checked)}
               disabled={models.length === 0}
             />
-            <span>Use Local Ollama for Staff-Engineer Questions &amp; Grading</span>
-            {models.length > 0 && (
-              <select
-                className="select-field"
-                style={{ width: "auto", padding: "3px 8px", fontSize: "0.78rem" }}
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-              >
-                {models.map((m) => (
-                  <option key={m.name} value={m.name}>{m.name}</option>
-                ))}
-              </select>
-            )}
+            <span>Use Ollama to build study packs</span>
           </label>
-        </div>
-      </div>
 
-      {message && <div className="feedback-box ok" style={{ marginTop: 0 }}>{message}</div>}
-      {error && <div className="feedback-box err" style={{ marginTop: 0 }}>{error}</div>}
-
-      {/* Persisted Mock Interview Readiness History */}
-      {interviews.length > 0 && (
-        <div className="card">
-          <h3 className="card-title">
-            <Award size={17} color="#e0af68" /> Mock Interview Readiness History ({interviews.length})
-          </h3>
-          <div className="grid-2">
-            {interviews.slice(0, 6).map((iv) => {
-              const score = Math.round(iv.readiness_score || 0);
-              return (
-                <div key={iv.id} className="repo-card-item">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <strong>{iv.repo_full_name}</strong>
-                    <span className={`readiness-badge ${readinessClass(score)}`}>
-                      Readiness {score}%
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <span className="muted" style={{ fontSize: "0.78rem" }}>
-                      Status: {iv.status}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary"
-                      disabled={Boolean(startingMockRepo)}
-                      onClick={() => startMockInterview(iv.repo_full_name)}
-                    >
-                      <MessageSquareCode size={13} />{" "}
-                      {startingMockRepo === iv.repo_full_name ? "Starting..." : "Start Mock Interview"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="repo-field">
+            <label htmlFor="repo-local-model">Local model</label>
+            <select
+              id="repo-local-model"
+              className="select-field"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={models.length === 0}
+            >
+              {models.length === 0 ? (
+                <option value="">No local Ollama models detected</option>
+              ) : (
+                models.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
-        </div>
-      )}
 
-      {/* Generated Repo Interview Study Packs */}
-      <div className="card">
-        <h3 className="card-title">
-          <BookOpen size={17} color="#73daca" /> Your Repo Interview Study Packs ({packs.length})
-        </h3>
-        {packs.length === 0 ? (
-          <p className="muted" style={{ margin: 0, fontSize: "0.86rem" }}>
-            No repo study packs yet—click <strong>Study for Interview</strong> or <strong>Start Mock Interview</strong> on any repository below!
+          <p className="muted repo-settings-hint">
+            {models.length > 0
+              ? "When enabled, DevQuest uses your selected local Ollama model to craft repo-specific study packs and mock interview evaluations."
+              : "Start Ollama locally to unlock AI-generated study pack questions. Built-in static repository analysis works offline."}
           </p>
-        ) : (
-          <div className="grid-2">
-            {packs.map((p) => {
-              const repoFullName = extractRepoFromModule(p);
-              const iv = readinessByRepo.get(repoFullName.toLowerCase()) || readinessByRepo.get(p.id);
-              const score = iv ? Math.round(iv.readiness_score) : null;
-              return (
-                <div key={p.id} className="repo-card-item">
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <strong>{p.title}</strong>
-                      {score !== null && (
-                        <span className={`readiness-badge ${readinessClass(score)}`}>
-                          <Award size={11} /> {score}% Ready
-                        </span>
-                      )}
-                    </div>
-                    <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
-                      {p.completed_count}/{p.activity_count} defense drills mastered • {p.tech_slug.toUpperCase()}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-konsole"
-                      disabled={Boolean(startingMockRepo)}
-                      onClick={() => startMockInterview(repoFullName)}
-                    >
-                      <MessageSquareCode size={13} />
-                      {startingMockRepo === repoFullName ? "Starting..." : "Start Mock Interview"}
-                    </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenModule(p.id)}>
-                      <Play size={13} /> Defend
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Connected GitHub Repositories Picker */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-          <h3 className="card-title" style={{ margin: 0 }}>
-            Your GitHub Repositories ({filteredRepos.length})
-          </h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 260 }}>
-            <Search size={15} color="#93a3be" />
-            <input
-              className="input-field"
-              placeholder="Filter repos by name or language..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </div>
         </div>
-
-        {filteredRepos.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No repositories loaded yet.</p>
-        ) : (
-          <div className="grid-2">
-            {filteredRepos.map((r) => {
-              const iv = readinessByRepo.get(r.full_name.toLowerCase());
-              const score = iv ? Math.round(iv.readiness_score) : null;
-              return (
-                <div key={r.full_name} className="repo-card-item">
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-                      <strong>{r.full_name}</strong>
-                      <span className="badge badge-kind">{r.language}</span>
-                      {r.private && (
-                        <span className="badge badge-warming">
-                          <Lock size={10} /> Private
-                        </span>
-                      )}
-                      {score !== null && (
-                        <span className={`readiness-badge ${readinessClass(score)}`}>
-                          <Award size={11} /> {score}% Ready
-                        </span>
-                      )}
-                    </div>
-                    <p className="muted" style={{ margin: 0, fontSize: "0.83rem" }}>
-                      {r.description || "No description"}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                    <a
-                      href={r.html_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="muted"
-                      style={{ fontSize: "0.78rem" }}
-                    >
-                      View on GitHub
-                    </a>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="btn btn-konsole btn-sm"
-                        disabled={Boolean(busyRepo) || Boolean(startingMockRepo)}
-                        onClick={() => startMockInterview(r.full_name)}
-                      >
-                        <MessageSquareCode size={13} />
-                        {startingMockRepo === r.full_name ? "Starting..." : "Start Mock Interview"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={Boolean(busyRepo) || Boolean(startingMockRepo)}
-                        onClick={() => analyzeRepo(r.full_name)}
-                      >
-                        <BookOpen size={13} />
-                        {busyRepo === r.full_name ? "Building..." : "Study for Interview"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      </details>
     </div>
   );
 }

@@ -69,19 +69,7 @@ export function TracksView({ initialTech, onOpenModule }: Props) {
 
             <div className="grid-2">
               {(t.modules || []).map((m) => (
-                <div
-                  key={m.id}
-                  style={{
-                    background: "#131928",
-                    border: "1px solid #26314c",
-                    borderRadius: 10,
-                    padding: 14,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
+                <div key={m.id} className="track-module-card" data-testid={`track-module-${m.id}`}>
                   <div>
                     <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
                       <span className="badge badge-kind">{m.kind}</span>

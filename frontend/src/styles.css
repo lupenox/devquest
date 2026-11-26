@@ -1,38 +1,11 @@
 /* ============================================================================
    DevQuest v2.0 Theme Tokens
-   Featured Default: emerald-3d ("Emerald 3D Glass")
-   Secondary Showstopper: frutiger-aero ("Frutiger Aero")
+   Featured Default: frutiger-aero ("Frutiger Aero")
+   Secondary Showstopper: emerald-3d ("Emerald 3D Glass")
    Neovim Classics: tokyo-night, catppuccin, gruvbox, kanagawa
    ============================================================================ */
 
 :root,
-[data-theme="emerald-3d"] {
-  --bg: #041311;
-  --bg-glow: #0b3a30;
-  --bg-elev: rgba(9, 34, 29, 0.72);
-  --bg-card: rgba(11, 39, 34, 0.74);
-  --bg-surface: rgba(7, 27, 23, 0.78);
-  --bg-code: #030e0c;
-  --bg-code-text: #d1fae5;
-  --bg-hover: rgba(19, 68, 57, 0.85);
-  --border: rgba(52, 211, 153, 0.25);
-  --border-subtle: rgba(52, 211, 153, 0.14);
-  --text: #ecfdf5;
-  --text-muted: #98c9b8;
-  --accent: #34d399;
-  --accent-2: #2dd4bf;
-  --accent-contrast: #031a15;
-  --green: #6ee7b7;
-  --green-solid: #10b981;
-  --amber: #fbbf24;
-  --red: #fb7185;
-  --cyan: #5eead4;
-  --header-bg: linear-gradient(145deg, rgba(14, 52, 43, 0.72), rgba(6, 25, 22, 0.82));
-  --toast-bg: linear-gradient(135deg, rgba(10, 56, 44, 0.94), rgba(6, 30, 26, 0.94));
-  --radius: 14px;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
 [data-theme="frutiger-aero"] {
   --bg: #88def7;
   --bg-glow: #c4f7d4;
@@ -56,6 +29,39 @@
   --cyan: #0891b2;
   --header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(224, 248, 255, 0.74) 100%);
   --toast-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(220, 252, 231, 0.92));
+  --heat-empty: rgba(14, 116, 144, 0.11);
+  --heat-empty-border: rgba(14, 116, 144, 0.22);
+  --heat-active-rgb: 22, 163, 74;
+  --radius: 14px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+[data-theme="emerald-3d"] {
+  --bg: #041311;
+  --bg-glow: #0b3a30;
+  --bg-elev: rgba(9, 34, 29, 0.72);
+  --bg-card: rgba(11, 39, 34, 0.74);
+  --bg-surface: rgba(7, 27, 23, 0.78);
+  --bg-code: #030e0c;
+  --bg-code-text: #d1fae5;
+  --bg-hover: rgba(19, 68, 57, 0.85);
+  --border: rgba(52, 211, 153, 0.25);
+  --border-subtle: rgba(52, 211, 153, 0.14);
+  --text: #ecfdf5;
+  --text-muted: #98c9b8;
+  --accent: #34d399;
+  --accent-2: #2dd4bf;
+  --accent-contrast: #031a15;
+  --green: #6ee7b7;
+  --green-solid: #10b981;
+  --amber: #fbbf24;
+  --red: #fb7185;
+  --cyan: #5eead4;
+  --header-bg: linear-gradient(145deg, rgba(14, 52, 43, 0.72), rgba(6, 25, 22, 0.82));
+  --toast-bg: linear-gradient(135deg, rgba(10, 56, 44, 0.94), rgba(6, 30, 26, 0.94));
+  --heat-empty: #030e0c;
+  --heat-empty-border: rgba(52, 211, 153, 0.16);
+  --heat-active-rgb: 52, 211, 153;
   --radius: 14px;
 }
 
@@ -82,6 +88,9 @@
   --cyan: #7dcfff;
   --header-bg: linear-gradient(135deg, rgba(26, 34, 52, 0.96), rgba(18, 24, 38, 0.96));
   --toast-bg: linear-gradient(135deg, #16302a, #1a2234);
+  --heat-empty: #0b0f17;
+  --heat-empty-border: #222c45;
+  --heat-active-rgb: 115, 218, 202;
   --radius: 12px;
 }
 
@@ -108,6 +117,9 @@
   --cyan: #89dceb;
   --header-bg: linear-gradient(135deg, rgba(30, 30, 46, 0.96), rgba(24, 24, 37, 0.96));
   --toast-bg: linear-gradient(135deg, #1b2e26, #1e1e2e);
+  --heat-empty: #11111b;
+  --heat-empty-border: #27273a;
+  --heat-active-rgb: 166, 227, 161;
   --radius: 12px;
 }
 
@@ -134,6 +146,9 @@
   --cyan: #83a598;
   --header-bg: linear-gradient(135deg, rgba(50, 48, 47, 0.96), rgba(40, 40, 40, 0.96));
   --toast-bg: linear-gradient(135deg, #2d331d, #32302f);
+  --heat-empty: #1d2021;
+  --heat-empty-border: #3c3836;
+  --heat-active-rgb: 184, 187, 38;
   --radius: 12px;
 }
 
@@ -160,6 +175,9 @@
   --cyan: #7fb4ca;
   --header-bg: linear-gradient(135deg, rgba(37, 37, 53, 0.96), rgba(31, 31, 40, 0.96));
   --toast-bg: linear-gradient(135deg, #202d23, #252535);
+  --heat-empty: #16161d;
+  --heat-empty-border: #2a2a37;
+  --heat-active-rgb: 152, 187, 108;
   --radius: 12px;
 }
 
@@ -411,11 +429,34 @@ code, pre {
   border-radius: 10px;
 }
 
+.surface-row .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .surface-card {
   padding: 14px 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
+}
+
+.track-module-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.track-module-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
 }
 
 .rank-hero-bar {
@@ -965,8 +1006,8 @@ code, pre {
   flex: 1;
   height: 28px;
   border-radius: 5px;
-  background: var(--bg-code);
-  border: 1px solid var(--border-subtle);
+  background: var(--heat-empty, var(--bg-code));
+  border: 1px solid var(--heat-empty-border, var(--border-subtle));
   position: relative;
 }
 
@@ -995,11 +1036,10 @@ code, pre {
 }
 
 /* ============================================================================
-   Showstopper Theme #1: EMERALD 3D GLASS (Featured Default)
+   Showstopper Theme #2: EMERALD 3D GLASS
    Solaax-inspired luminous emerald depth, frosted glass dock, 3D tactile lift
    ============================================================================ */
 
-:root:not([data-theme]) body,
 [data-theme="emerald-3d"] body {
   background:
     radial-gradient(ellipse 68% 48% at 88% -8%, rgba(16, 185, 129, 0.28) 0%, transparent 62%),
@@ -1009,7 +1049,6 @@ code, pre {
   background-attachment: fixed;
 }
 
-:root:not([data-theme]) .hud-header,
 [data-theme="emerald-3d"] .hud-header {
   backdrop-filter: blur(18px) saturate(155%);
   -webkit-backdrop-filter: blur(18px) saturate(155%);
@@ -1021,7 +1060,6 @@ code, pre {
     0 0 32px rgba(16, 185, 129, 0.14);
 }
 
-:root:not([data-theme]) .nav-tabs,
 [data-theme="emerald-3d"] .nav-tabs {
   width: fit-content;
   max-width: 100%;
@@ -1036,20 +1074,17 @@ code, pre {
     0 10px 28px rgba(0, 0, 0, 0.36);
 }
 
-:root:not([data-theme]) .nav-btn,
 [data-theme="emerald-3d"] .nav-btn {
   border-radius: 999px;
   border-color: transparent;
   background: transparent;
 }
 
-:root:not([data-theme]) .nav-btn:hover,
 [data-theme="emerald-3d"] .nav-btn:hover {
   background: rgba(52, 211, 153, 0.12);
   border-color: rgba(110, 231, 183, 0.28);
 }
 
-:root:not([data-theme]) .nav-btn.active,
 [data-theme="emerald-3d"] .nav-btn.active {
   background: linear-gradient(180deg, rgba(52, 211, 153, 0.32), rgba(16, 185, 129, 0.18));
   border-color: rgba(110, 231, 183, 0.52);
@@ -1059,9 +1094,6 @@ code, pre {
     0 4px 14px rgba(16, 185, 129, 0.26);
 }
 
-:root:not([data-theme]) .card,
-:root:not([data-theme]) .zy-section,
-:root:not([data-theme]) .zy-activity,
 [data-theme="emerald-3d"] .card,
 [data-theme="emerald-3d"] .zy-section,
 [data-theme="emerald-3d"] .zy-activity {
@@ -1074,10 +1106,8 @@ code, pre {
     0 12px 28px rgba(0, 0, 0, 0.38);
 }
 
-:root:not([data-theme]) .tech-card,
-:root:not([data-theme]) .sprint-dur-card,
-:root:not([data-theme]) .tree-node,
 [data-theme="emerald-3d"] .tech-card,
+[data-theme="emerald-3d"] .track-module-card,
 [data-theme="emerald-3d"] .sprint-dur-card,
 [data-theme="emerald-3d"] .tree-node {
   background: linear-gradient(160deg, rgba(16, 56, 47, 0.72), rgba(7, 27, 23, 0.86));
@@ -1089,10 +1119,8 @@ code, pre {
   will-change: transform;
 }
 
-:root:not([data-theme]) .tech-card:hover,
-:root:not([data-theme]) .sprint-dur-card:hover,
-:root:not([data-theme]) .tree-node:hover,
 [data-theme="emerald-3d"] .tech-card:hover,
+[data-theme="emerald-3d"] .track-module-card:hover,
 [data-theme="emerald-3d"] .sprint-dur-card:hover,
 [data-theme="emerald-3d"] .tree-node:hover {
   transform: perspective(760px) translateY(-4px) rotateX(2.5deg) rotateY(-1.5deg);
@@ -1104,14 +1132,11 @@ code, pre {
     0 0 26px rgba(52, 211, 153, 0.22);
 }
 
-:root:not([data-theme]) .tech-card:active,
-:root:not([data-theme]) .sprint-dur-card:active,
 [data-theme="emerald-3d"] .tech-card:active,
 [data-theme="emerald-3d"] .sprint-dur-card:active {
   transform: perspective(760px) translateY(1px) scale(0.99);
 }
 
-:root:not([data-theme]) .btn,
 [data-theme="emerald-3d"] .btn {
   box-shadow:
     inset 0 1px 0 rgba(209, 250, 229, 0.18),
@@ -1119,7 +1144,6 @@ code, pre {
     0 6px 14px rgba(0, 0, 0, 0.28);
 }
 
-:root:not([data-theme]) .btn:hover:not(:disabled),
 [data-theme="emerald-3d"] .btn:hover:not(:disabled) {
   transform: perspective(600px) translateY(-2px) rotateX(2.5deg);
   box-shadow:
@@ -1129,7 +1153,6 @@ code, pre {
     0 0 18px rgba(52, 211, 153, 0.2);
 }
 
-:root:not([data-theme]) .btn:active:not(:disabled),
 [data-theme="emerald-3d"] .btn:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow:
@@ -1137,7 +1160,6 @@ code, pre {
     0 1px 0 rgba(2, 18, 15, 0.9);
 }
 
-:root:not([data-theme]) .code-block,
 [data-theme="emerald-3d"] .code-block {
   background: #030e0c;
   color: #d1fae5;
@@ -1145,23 +1167,22 @@ code, pre {
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
-:root:not([data-theme]) .badge-kind,
 [data-theme="emerald-3d"] .badge-kind {
   background: rgba(52, 211, 153, 0.18);
   color: #6ee7b7;
 }
 
-:root:not([data-theme]) .badge-xp,
 [data-theme="emerald-3d"] .badge-xp {
   background: rgba(45, 212, 191, 0.2);
   color: #5eead4;
 }
 
 /* ============================================================================
-   Showstopper Theme #2: FRUTIGER AERO
+   Showstopper Theme #1: FRUTIGER AERO (Featured Default)
    Luminous sky-to-aqua-to-mint bokeh orbs, translucent glass, gel-sheen gloss
    ============================================================================ */
 
+:root:not([data-theme]) body,
 [data-theme="frutiger-aero"] body {
   background:
     radial-gradient(circle 220px at 11% 14%, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.18) 45%, transparent 72%),
@@ -1218,14 +1239,19 @@ code, pre {
   border-color: rgba(2, 132, 199, 0.28);
 }
 
-[data-theme="frutiger-aero"] .nav-btn.active {
+[data-theme="frutiger-aero"] .nav-btn.active,
+[data-theme="frutiger-aero"] .nav-btn.active:hover {
   background: linear-gradient(180deg, #7dd3fc 0%, #0ea5e9 49%, #0284c7 51%, #38bdf8 100%);
   color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.86);
   text-shadow: 0 1px 1px rgba(0, 42, 74, 0.45);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.88),
-    0 4px 12px rgba(2, 132, 199, 0.3);
+    0 4px 12px rgba(2, 132, 199, 0.32);
+}
+
+[data-theme="frutiger-aero"] .nav-btn.active:hover {
+  filter: brightness(1.06);
 }
 
 [data-theme="frutiger-aero"] .card,
@@ -1245,16 +1271,18 @@ code, pre {
 }
 
 [data-theme="frutiger-aero"] .tech-card,
+[data-theme="frutiger-aero"] .track-module-card,
 [data-theme="frutiger-aero"] .sprint-dur-card,
 [data-theme="frutiger-aero"] .tree-node {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(226, 248, 255, 0.76) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(226, 248, 255, 0.78) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.94);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.98),
     0 5px 15px rgba(11, 78, 114, 0.12);
 }
 
 [data-theme="frutiger-aero"] .tech-card:hover,
+[data-theme="frutiger-aero"] .track-module-card:hover,
 [data-theme="frutiger-aero"] .sprint-dur-card:hover,
 [data-theme="frutiger-aero"] .tree-node:hover {
   transform: translateY(-3px);
@@ -1262,6 +1290,74 @@ code, pre {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 1),
     0 10px 22px rgba(2, 132, 199, 0.22);
+}
+
+[data-theme="frutiger-aero"] .surface-row,
+[data-theme="frutiger-aero"] .surface-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(232, 249, 255, 0.82));
+  border-color: rgba(14, 116, 144, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="frutiger-aero"] .heat-cell {
+  background: rgba(14, 116, 144, 0.11);
+  border-color: rgba(14, 116, 144, 0.22);
+}
+
+[data-theme="frutiger-aero"] .achievement-card {
+  background: rgba(244, 252, 255, 0.84);
+  border-color: rgba(14, 116, 144, 0.22);
+}
+
+[data-theme="frutiger-aero"] .achievement-card.unlocked {
+  border-color: #0ea5e9;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(220, 252, 231, 0.82));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 4px 12px rgba(2, 132, 199, 0.12);
+}
+
+[data-theme="frutiger-aero"] .sprint-dur-card.selected {
+  border-color: #0284c7;
+  background: linear-gradient(180deg, rgba(224, 242, 254, 0.96), rgba(186, 230, 253, 0.86));
+  box-shadow: 0 0 0 1px #0284c7, 0 6px 16px rgba(2, 132, 199, 0.18);
+}
+
+[data-theme="frutiger-aero"] .combo-pill.combo-1 {
+  color: #0369a1;
+  border-color: #0284c7;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+[data-theme="frutiger-aero"] .combo-pill.combo-2 {
+  color: #92400e;
+  border-color: #d97706;
+  background: rgba(245, 158, 11, 0.18);
+}
+
+[data-theme="frutiger-aero"] .combo-pill.combo-3 {
+  color: #9f1239;
+  border-color: #e11d48;
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.22), rgba(251, 191, 36, 0.24));
+}
+
+[data-theme="frutiger-aero"] .btn-konsole {
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 42, 74, 0.45);
+}
+
+[data-theme="frutiger-aero"] .tree-node.completed {
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.94), rgba(220, 252, 231, 0.84));
+  border-color: #16a34a;
+}
+
+[data-theme="frutiger-aero"] .cmd-input-row,
+[data-theme="frutiger-aero"] .cmd-footer {
+  background: rgba(235, 250, 255, 0.92);
+  border-color: rgba(14, 116, 144, 0.2);
+}
+
+[data-theme="frutiger-aero"] .cmd-item.selected {
+  background: rgba(2, 132, 199, 0.14);
+  border-color: #0284c7;
 }
 
 [data-theme="frutiger-aero"] .btn {
@@ -1436,6 +1532,7 @@ code, pre {
   }
 
   .tech-card:hover,
+  .track-module-card:hover,
   .sprint-dur-card:hover,
   .tree-node:hover,
   .btn:hover:not(:disabled) {

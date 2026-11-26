@@ -39,8 +39,8 @@ interface Props {
 }
 
 const THEMES: { id: ThemeId; label: string; desc: string }[] = [
-  { id: "emerald-3d", label: "Emerald 3D Glass", desc: "Luminous 3D frosted emerald & Neovim mint (Featured)" },
-  { id: "frutiger-aero", label: "Frutiger Aero", desc: "Glossy aqua sky glass, bokeh orbs & leaf green" },
+  { id: "frutiger-aero", label: "Frutiger Aero", desc: "Glossy aqua sky glass, bokeh orbs & leaf green (Default)" },
+  { id: "emerald-3d", label: "Emerald 3D Glass", desc: "Luminous 3D frosted emerald & Neovim mint" },
   { id: "tokyo-night", label: "Tokyo Night", desc: "Deep indigo night palette" },
   { id: "catppuccin", label: "Catppuccin Mocha", desc: "Pastel lavender & dark mocha" },
   { id: "gruvbox", label: "Gruvbox Dark", desc: "Retro warm amber & olive" },

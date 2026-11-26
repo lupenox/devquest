@@ -251,16 +251,20 @@ export function DashboardView({
           </div>
           <div className="heatmap">
             {heatDays.map((h) => {
-              const alpha = h.xp === 0 ? 0.08 : Math.min(0.95, 0.25 + h.xp / 150);
+              const alpha = h.xp === 0 ? 0 : Math.min(0.95, 0.35 + h.xp / 140);
               return (
                 <div
                   key={h.day}
-                  className="heat-cell"
+                  className={`heat-cell ${h.xp > 0 ? "active" : ""}`}
                   title={`${h.day}: ${h.xp} XP`}
-                  style={{
-                    background: h.xp > 0 ? `rgba(115, 218, 202, ${alpha})` : "var(--bg-code)",
-                    borderColor: h.xp > 0 ? "var(--green)" : "var(--border-subtle)",
-                  }}
+                  style={
+                    h.xp > 0
+                      ? {
+                          background: `rgba(var(--heat-active-rgb, 115, 218, 202), ${alpha})`,
+                          borderColor: "var(--green)",
+                        }
+                      : undefined
+                  }
                 />
               );
             })}

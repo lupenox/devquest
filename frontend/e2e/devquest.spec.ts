@@ -66,6 +66,8 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   const manifestJson = await manifestResp.json();
   expect(manifestJson.name).toContain("DevQuest");
   expect(manifestJson.display).toBe("standalone");
+  expect(manifestJson.theme_color).toBe("#0284c7");
+  expect(manifestJson.background_color).toBe("#e0f7ff");
   expect(Array.isArray(manifestJson.icons) && manifestJson.icons.length > 0).toBeTruthy();
 
   const swResp = await request.get("/sw.js");
@@ -84,17 +86,17 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   await expect(page.getByTestId("player-rank-badge")).toBeVisible();
   await expect(page.getByTestId("achievements-shelf")).toBeVisible();
 
-  // 3. Theme switching: default emerald-3d -> frutiger-aero -> catppuccin -> gruvbox -> emerald-3d
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "emerald-3d");
-  const switcher = page.getByTestId("theme-switcher");
-  await switcher.selectOption("frutiger-aero");
+  // 3. Theme switching: default frutiger-aero -> emerald-3d -> catppuccin -> gruvbox -> frutiger-aero
   await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
+  const switcher = page.getByTestId("theme-switcher");
+  await switcher.selectOption("emerald-3d");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "emerald-3d");
   await switcher.selectOption("catppuccin");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "catppuccin");
   await switcher.selectOption("gruvbox");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "gruvbox");
-  await switcher.selectOption("emerald-3d");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "emerald-3d");
+  await switcher.selectOption("frutiger-aero");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
 
   // 4. Ctrl+K Command Palette search for "pdb" -> /modules/debugging-pdb-101 + reload via SPA fallback!
   await page.keyboard.press("Control+k");
@@ -237,9 +239,27 @@ def moving_average(values, window):
   await expect(page.getByTestId("tree-node-fastapi-di-middleware-201")).toBeVisible();
 
   if (shotDir) {
+    await page.mouse.move(10, 10);
     await page.screenshot({
       path: path.join(shotDir, "v2_skill_tree.png"),
       fullPage: false,
+      animations: "disabled",
+    });
+  }
+
+  // 9b. Verify Tracks & zyBooks module cards render with light Frutiger Aero glass (no hardcoded dark #131928)
+  await page.getByRole("button", { name: /tracks & zybooks/i }).click();
+  await expect(page).toHaveURL(/\/tracks$/);
+  const trackModCard = page.locator(".track-module-card").first();
+  await expect(trackModCard).toBeVisible({ timeout: 10000 });
+  const trackCardBg = await trackModCard.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(trackCardBg).not.toBe("rgb(19, 25, 40)");
+  if (shotDir) {
+    await page.mouse.move(10, 10);
+    await page.screenshot({
+      path: path.join(shotDir, "v2_frutiger_aero_tracks.png"),
+      fullPage: false,
+      animations: "disabled",
     });
   }
 
@@ -279,9 +299,11 @@ def moving_average(values, window):
 
   if (shotDir) {
     await page.evaluate(() => window.scrollTo(0, 0));
+    await page.mouse.move(10, 10);
     await page.screenshot({
-      path: path.join(shotDir, "v2_dashboard_achievements.png"),
+      path: path.join(shotDir, "v2_frutiger_aero_default.png"),
       fullPage: false,
+      animations: "disabled",
     });
   }
 });

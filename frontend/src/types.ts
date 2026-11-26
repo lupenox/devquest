@@ -1,6 +1,6 @@
 export type ThemeId =
-  | "emerald-3d"
   | "frutiger-aero"
+  | "emerald-3d"
   | "tokyo-night"
   | "catppuccin"
   | "gruvbox"

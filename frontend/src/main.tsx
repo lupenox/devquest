@@ -4,21 +4,21 @@ import App from "./App";
 import "./styles.css";
 
 const VALID_THEMES = [
-  "emerald-3d",
   "frutiger-aero",
+  "emerald-3d",
   "tokyo-night",
   "catppuccin",
   "gruvbox",
   "kanagawa",
 ];
 
-// Hydrate persisted aesthetic theme before first paint (default: emerald-3d)
+// Hydrate persisted aesthetic theme before first paint (default: frutiger-aero)
 try {
   const savedTheme = window.localStorage.getItem("devquest_theme");
-  const initialTheme = savedTheme && VALID_THEMES.includes(savedTheme) ? savedTheme : "emerald-3d";
+  const initialTheme = savedTheme && VALID_THEMES.includes(savedTheme) ? savedTheme : "frutiger-aero";
   document.documentElement.setAttribute("data-theme", initialTheme);
 } catch {
-  document.documentElement.setAttribute("data-theme", "emerald-3d");
+  document.documentElement.setAttribute("data-theme", "frutiger-aero");
 }
 
 // Register PWA Service Worker

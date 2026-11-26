@@ -228,7 +228,7 @@ describe("DevQuest UI Components", () => {
       <CommandPalette
         open={true}
         onClose={onClose}
-        currentTheme="emerald-3d"
+        currentTheme="frutiger-aero"
         technologies={mockDashboard.technologies}
         onNavigateTab={vi.fn()}
         onSelectTech={vi.fn()}
@@ -433,7 +433,7 @@ describe("DevQuest UI Components", () => {
     expect(onSprintCompleted).toHaveBeenCalledTimes(1);
   });
 
-  it("App initializes default emerald-3d theme and switches themes cleanly via HUD switcher", async () => {
+  it("App initializes default frutiger-aero theme and switches themes cleanly via HUD switcher", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockDashboard,
@@ -452,12 +452,15 @@ describe("DevQuest UI Components", () => {
       expect(screen.getByTestId("theme-switcher")).toBeInTheDocument();
     });
 
-    expect(document.documentElement.getAttribute("data-theme")).toBe("emerald-3d");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("frutiger-aero");
 
     const switcher = screen.getByTestId("theme-switcher") as HTMLSelectElement;
-    fireEvent.change(switcher, { target: { value: "frutiger-aero" } });
-    expect(document.documentElement.getAttribute("data-theme")).toBe("frutiger-aero");
-    expect(window.localStorage.getItem("devquest_theme")).toBe("frutiger-aero");
+    expect(switcher.options[0].value).toBe("frutiger-aero");
+    expect(switcher.options[1].value).toBe("emerald-3d");
+
+    fireEvent.change(switcher, { target: { value: "emerald-3d" } });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("emerald-3d");
+    expect(window.localStorage.getItem("devquest_theme")).toBe("emerald-3d");
 
     fireEvent.change(switcher, { target: { value: "catppuccin" } });
     expect(document.documentElement.getAttribute("data-theme")).toBe("catppuccin");

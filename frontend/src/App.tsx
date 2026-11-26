@@ -35,8 +35,8 @@ import type { DashboardData, GradeOutcome, SprintCompleteResp, ThemeId, Unlocked
 
 const THEME_STORAGE_KEY = "devquest_theme";
 const VALID_THEMES: ThemeId[] = [
-  "emerald-3d",
   "frutiger-aero",
+  "emerald-3d",
   "tokyo-night",
   "catppuccin",
   "gruvbox",
@@ -44,8 +44,8 @@ const VALID_THEMES: ThemeId[] = [
 ];
 
 const THEME_META_COLORS: Record<ThemeId, string> = {
+  "frutiger-aero": "#0284c7",
   "emerald-3d": "#041311",
-  "frutiger-aero": "#7ad9f5",
   "tokyo-night": "#0d111a",
   catppuccin: "#11111b",
   gruvbox: "#1d2021",
@@ -59,7 +59,7 @@ function loadInitialTheme(): ThemeId {
   } catch {
     // ignore storage errors
   }
-  return "emerald-3d";
+  return "frutiger-aero";
 }
 
 function isEditableElement(target: EventTarget | null): boolean {
@@ -120,7 +120,7 @@ export function App() {
     document.documentElement.setAttribute("data-theme", theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute("content", THEME_META_COLORS[theme] || "#041311");
+      meta.setAttribute("content", THEME_META_COLORS[theme] || "#0284c7");
     }
   }, [theme]);
 
@@ -327,8 +327,8 @@ export function App() {
               value={theme}
               onChange={(e) => applyTheme(e.target.value as ThemeId)}
             >
-              <option value="emerald-3d">Emerald 3D Glass</option>
               <option value="frutiger-aero">Frutiger Aero</option>
+              <option value="emerald-3d">Emerald 3D Glass</option>
               <option value="tokyo-night">Tokyo Night</option>
               <option value="catppuccin">Catppuccin Mocha</option>
               <option value="gruvbox">Gruvbox Dark</option>

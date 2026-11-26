@@ -32,6 +32,17 @@ import {
   type NavTab,
 } from "./router";
 import type { DashboardData, GradeOutcome, SprintCompleteResp, ThemeId, UnlockedAchievement } from "./types";
+import "./dashboard-shell.css";
+
+const NAV_ITEMS = [
+  { tab: "dashboard", label: "Mastery Dashboard", compact: "Dashboard", mobile: "Home", Icon: LayoutDashboard },
+  { tab: "tracks", label: "Tracks & zyBooks", compact: "Tracks", mobile: "Tracks", Icon: BookOpen },
+  { tab: "sprint", label: "AI Break Sprint", compact: "Sprint", mobile: "Sprint", Icon: Zap },
+  { tab: "repos", label: "Repo Interview Prep", compact: "Repo prep", mobile: "Repos", Icon: FolderGit2 },
+  { tab: "tree", label: "Skill Tree", compact: "Skill tree", mobile: "Tree", Icon: GitBranch },
+  { tab: "projects", label: "Boss Projects", compact: "Projects", mobile: null, Icon: Swords },
+  { tab: "forge", label: "Sync & AI Forge", compact: "AI Forge", mobile: null, Icon: RefreshCw },
+] as const;
 
 const THEME_STORAGE_KEY = "devquest_theme";
 const VALID_THEMES: ThemeId[] = [
@@ -279,37 +290,50 @@ export function App() {
 
   const activeTab = route.tab;
   const activeModuleId = route.moduleId;
+  const isDashboard = activeTab === "dashboard" && !activeModuleId;
   const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
 
+  const connection = (
+    <div className="hud-pill connection-status" title="Live Neovim WebSocket connection">
+      <span className={`ws-dot ${wsOnline ? "online" : ""}`} />
+      <span style={{ fontSize: "0.8rem" }}>{wsOnline ? "Neovim Live" : "Reconnecting"}</span>
+    </div>
+  );
+
   return (
-    <div className="app-shell">
+    <div className={isDashboard ? "app-shell dashboard-shell" : "app-shell"}>
       <header className="hud-header">
-        <div
-          className="brand-row"
-          style={{ cursor: "pointer" }}
-          onClick={() => openTab("dashboard")}
+        <a
+          className="brand-row brand-home"
+          href="/"
+          aria-label="DevQuest home"
+          onClick={(event) => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            openTab("dashboard");
+          }}
         >
-          <div className="brand-icon">
-            <Terminal size={22} />
-          </div>
+          <div className="brand-icon"><Terminal size={22} /></div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <h1 className="brand-title">DevQuest</h1>
-              {rankTitle && (
+              {!isDashboard && rankTitle && (
                 <span className="rank-chip" data-testid="hud-rank">
                   <Shield size={12} /> {rankTitle}
                 </span>
               )}
             </div>
-            <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>
+            {!isDashboard && <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>}
           </div>
-        </div>
+        </a>
+        {isDashboard && connection}
 
         <div className="hud-stats">
           <button
             type="button"
             className="cmd-trigger"
             data-testid="cmd-palette-trigger"
+            aria-label="Search commands and lessons"
             onClick={() => setPaletteOpen(true)}
             title="Open Command Palette (Ctrl+K or /)"
           >
@@ -336,7 +360,7 @@ export function App() {
             </select>
           </label>
 
-          {dashboard && (
+          {dashboard && !isDashboard && (
             <>
               <div className="hud-pill" data-testid="hud-level">
                 <span className="level-badge">Lv.{dashboard.level}</span>
@@ -358,63 +382,26 @@ export function App() {
               </div>
             </>
           )}
-          <div className="hud-pill" title="Live Neovim WebSocket connection">
-            <span className={`ws-dot ${wsOnline ? "online" : ""}`} />
-            <span style={{ fontSize: "0.8rem" }}>{wsOnline ? "Neovim Live" : "Reconnecting"}</span>
-          </div>
+          {!isDashboard && connection}
         </div>
       </header>
 
       <nav className="nav-tabs" aria-label="Main navigation">
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "dashboard" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("dashboard")}
-        >
-          <LayoutDashboard size={15} /> Mastery Dashboard
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "tracks" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("tracks")}
-        >
-          <BookOpen size={15} /> Tracks &amp; zyBooks
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "sprint" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("sprint")}
-        >
-          <Zap size={15} /> AI Break Sprint
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "repos" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("repos")}
-        >
-          <FolderGit2 size={15} /> Repo Interview Prep
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "tree" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("tree")}
-        >
-          <GitBranch size={15} /> Skill Tree
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "projects" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("projects")}
-        >
-          <Swords size={15} /> Boss Projects
-        </button>
-        <button
-          type="button"
-          className={`nav-btn ${activeTab === "forge" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("forge")}
-        >
-          <RefreshCw size={15} /> Sync &amp; AI Forge
-        </button>
+        {NAV_ITEMS.map(({ tab, label, compact, Icon }) => {
+          const active = activeTab === tab && !activeModuleId;
+          return (
+            <button
+              key={tab}
+              type="button"
+              className={`nav-btn${active ? " active" : ""}`}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+              onClick={() => openTab(tab)}
+            >
+              <Icon size={15} /> {isDashboard ? compact : label}
+            </button>
+          );
+        })}
       </nav>
 
       {error && (
@@ -464,48 +451,24 @@ export function App() {
       </main>
 
       {/* Mobile PWA Bottom Navigation Bar */}
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeTab === "dashboard" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("dashboard")}
-        >
-          <LayoutDashboard size={18} />
-          <span>Home</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeTab === "tracks" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("tracks")}
-        >
-          <BookOpen size={18} />
-          <span>Tracks</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeTab === "sprint" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("sprint")}
-        >
-          <Zap size={18} />
-          <span>Sprint</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeTab === "repos" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("repos")}
-        >
-          <FolderGit2 size={18} />
-          <span>Repos</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeTab === "tree" && !activeModuleId ? "active" : ""}`}
-          onClick={() => openTab("tree")}
-        >
-          <GitBranch size={18} />
-          <span>Tree</span>
-        </button>
-      </nav>
+      {!isDashboard && (
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+          {NAV_ITEMS.filter((item) => item.mobile).map(({ tab, mobile, Icon }) => {
+            const active = activeTab === tab && !activeModuleId;
+            return (
+              <button
+                key={tab}
+                type="button"
+                className={`mobile-nav-btn${active ? " active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => openTab(tab)}
+              >
+                <Icon size={18} /><span>{mobile}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       <CommandPalette
         open={paletteOpen}

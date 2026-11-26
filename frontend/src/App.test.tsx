@@ -121,32 +121,82 @@ describe("DevQuest UI Components", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("renders technology mastery progress bars, rank badge, achievements shelf, and triggers drill-down", () => {
+  it("keeps practice and sprint actions visible and reveals progress details on demand", () => {
     const onSelectTech = vi.fn();
+    const onOpenModule = vi.fn();
+    const onGoToForge = vi.fn();
     const onStartSprint = vi.fn();
     render(
       <DashboardView
         data={mockDashboard}
         onSelectTech={onSelectTech}
-        onOpenModule={vi.fn()}
-        onGoToForge={vi.fn()}
+        onOpenModule={onOpenModule}
+        onGoToForge={onGoToForge}
         onStartSprint={onStartSprint}
       />
     );
-    expect(screen.getByTestId("player-rank-badge")).toHaveTextContent("Lv.2 Buffer Apprentice");
-    expect(screen.getByTestId("achievements-shelf")).toHaveTextContent("1 / 2 Unlocked");
+    expect(screen.getByTestId("player-rank-badge")).toHaveTextContent("Buffer Apprentice");
+    fireEvent.click(screen.getByRole("button", { name: /start practice/i }));
+    expect(onOpenModule).toHaveBeenCalledWith("debugging-pdb-101");
+
+    for (const duration of [2, 5, 10]) {
+      fireEvent.click(screen.getByTestId(`quick-sprint-${duration}`));
+      expect(onStartSprint).toHaveBeenLastCalledWith(duration);
+    }
+
+    const achievements = screen.getByTestId("achievements-shelf");
+    expect(achievements).not.toHaveAttribute("open");
+    expect(achievements.querySelector("summary")).toHaveTextContent(/1\s*\/\s*2 unlocked/i);
+    fireEvent.click(achievements.querySelector("summary")!);
+    expect(screen.getByTestId("achievement-first_quest")).toBeVisible();
     expect(screen.getByTestId("achievement-first_quest")).toHaveClass("unlocked");
     expect(screen.getByTestId("achievement-bug_hunter")).toHaveClass("locked");
-    expect(screen.getByTestId("daily-warmup-list")).toHaveTextContent("Fresh Tech");
-    expect(screen.getByText("2-Technology Mastery Matrix")).toBeInTheDocument();
-    expect(screen.getByText("Python")).toBeInTheDocument();
-    expect(screen.getByText("32%")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("quick-sprint-2"));
-    expect(onStartSprint).toHaveBeenCalledWith(2);
-
-    fireEvent.click(screen.getByTestId("tech-card-python"));
+    const tracks = screen.getByTestId("learning-tracks");
+    expect(tracks).not.toHaveAttribute("open");
+    fireEvent.click(tracks.querySelector("summary")!);
+    const python = screen.getByTestId("tech-card-python");
+    expect(python).toBeVisible();
+    expect(python).toHaveTextContent("32%");
+    fireEvent.click(python);
     expect(onSelectTech).toHaveBeenCalledWith("python");
+    fireEvent.click(screen.getByRole("button", { name: /generate.*module/i }));
+    expect(onGoToForge).toHaveBeenCalledOnce();
+  });
+
+  it("offers a fallback drill when warmups are empty and opens an outstanding review", () => {
+    const onOpenModule = vi.fn();
+    const review = {
+      activity_id: "review-1", due_at: "2026-11-26", interval_days: 1, title: "Window functions",
+      tech_slug: "sql", module_id: "sql-window-functions-201", activity_type: "read_check",
+    };
+    const alternative = {
+      ...mockDashboard.recommended_next[0],
+      activity_id: "py-02-read-check",
+      module_id: "py-02-control-flow",
+      title: "Participation Activity: A branch with `elif`",
+    };
+    render(
+      <DashboardView
+        data={{
+          ...mockDashboard,
+          daily_warmup: [],
+          recommended_next: [...mockDashboard.recommended_next, alternative],
+          due_reviews: [review],
+        }}
+        onSelectTech={vi.fn()}
+        onOpenModule={onOpenModule}
+        onGoToForge={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start practice/i }));
+    expect(onOpenModule).toHaveBeenLastCalledWith("python-comprehensions-101");
+    expect(screen.getByTestId("daily-warmup-list")).not.toHaveTextContent("`elif`");
+    fireEvent.click(screen.getByText(/More practice/));
+    fireEvent.click(screen.getByRole("button", { name: /a branch with elif/i }));
+    expect(onOpenModule).toHaveBeenLastCalledWith("py-02-control-flow");
+    fireEvent.click(screen.getByRole("button", { name: /window functions/i }));
+    expect(onOpenModule).toHaveBeenLastCalledWith("sql-window-functions-201");
   });
 
   it("grades a zyBooks read_check activity and displays XP feedback", async () => {

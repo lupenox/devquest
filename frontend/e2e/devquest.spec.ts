@@ -57,7 +57,6 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   request,
 }) => {
   test.setTimeout(60000);
-  await page.setViewportSize({ width: 1400, height: 950 });
   const shotDir = process.env.CAPTURE_WALKTHROUGH_DIR || "";
 
   // 1. Verify PWA manifest & service worker endpoints return HTTP 200 valid responses
@@ -73,15 +72,37 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   const swResp = await request.get("/sw.js");
   expect(swResp.status()).toBe(200);
 
-  // 2. Load Dashboard, verify all 17 technologies, HUD Rank, Achievements Shelf & Neovim Live WS
+  // 2. Verify dashboard actions at tablet width, then open the full catalog with the keyboard.
+  await page.setViewportSize({ width: 896, height: 929 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "DevQuest" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /start practice/i })).toBeVisible();
+  await expect(page.getByTestId("tech-card-python")).toBeHidden();
+  await expect(page.getByTestId("achievement-first_quest")).toBeHidden();
+  const mainNav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(mainNav).toBeVisible();
+  const navRects = await mainNav.getByRole("button").evaluateAll(buttons =>
+    buttons.map(button => {
+      const { top, bottom } = button.getBoundingClientRect();
+      return { top, bottom };
+    })
+  );
+  expect(navRects.length).toBeGreaterThan(0);
+  expect(Math.max(...navRects.map(r => r.top))).toBeLessThan(Math.min(...navRects.map(r => r.bottom)));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(896);
+
+  const tracksToggle = page.getByTestId("learning-tracks").locator("summary");
+  await tracksToggle.focus();
+  await tracksToggle.press("Enter");
   for (const slug of [
     "neovim", "python", "fastapi", "bash", "typescript", "javascript",
     "cpp", "json", "xml", "html", "css", "sql", "git", "react", "playwright", "regex", "debugging",
   ]) {
     await expect(page.getByTestId(`tech-card-${slug}`)).toBeVisible();
   }
+  await tracksToggle.click();
+  await expect(page.getByTestId("tech-card-python")).toBeHidden();
+  await page.setViewportSize({ width: 1400, height: 950 });
   await expect(page.getByText("Neovim Live")).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId("player-rank-badge")).toBeVisible();
   await expect(page.getByTestId("achievements-shelf")).toBeVisible();
@@ -318,12 +339,24 @@ def moving_average(values, window):
   // 11. Return to Mastery Dashboard, verify unlocked XP & Achievements, capture Dashboard screenshot
   await page.getByRole("button", { name: /mastery dashboard/i }).click();
   await expect(page).toHaveURL(/\/$/);
+  const achievementsToggle = page.getByTestId("achievements-shelf").locator("summary");
+  await achievementsToggle.click();
+  await expect(page.getByTestId("achievement-first_quest")).toBeVisible();
   await expect(page.getByTestId("achievement-first_quest")).toHaveClass(/unlocked/);
   await expect(page.getByTestId("achievement-bug_hunter")).toHaveClass(/unlocked/);
   await expect(page.getByTestId("achievement-vim_par_sniper")).toHaveClass(/unlocked/);
+  await achievementsToggle.click();
+  await tracksToggle.click();
   await expect(page.getByTestId("tech-card-python")).toContainText(/\d+ XP/);
   await expect(page.getByTestId("tech-card-debugging")).toContainText(/\d+ XP/);
   await expect(page.getByTestId("tech-card-neovim")).toContainText(/\d+ XP/);
+  await tracksToggle.click();
+  const history = page.getByTestId("recent-xp");
+  const historyToggle = history.locator("summary");
+  await historyToggle.click();
+  await expect(history.locator(".heat-cell")).toHaveCount(14);
+  await expect(history.getByText(/\+\d+ XP/).first()).toBeVisible();
+  await historyToggle.click();
 
   if (shotDir) {
     await page.evaluate(() => window.scrollTo(0, 0));

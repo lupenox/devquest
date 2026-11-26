@@ -2,8 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Award,
   BookOpen,
+  Calendar,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
+  Clock,
+  ExternalLink,
   GitBranch,
   MessageSquareCode,
   RefreshCw,
@@ -11,12 +15,16 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
+  Video,
   X,
 } from "lucide-react";
 import { api } from "../api";
 import type {
   GitHubRepo,
   GitHubStatus,
+  InterviewCampaignDetail,
+  InterviewCampaignSummary,
   MockInterviewAnswerResp,
   MockInterviewQuestion,
   MockInterviewRubric,
@@ -25,11 +33,18 @@ import type {
   ModuleSummary,
   OllamaModel,
 } from "../types";
+import {
+  formatCountdown,
+  formatInterviewDate,
+  InterviewCampaignView,
+  NewCampaignModal,
+} from "./InterviewCampaignView";
 import { RepoBrowser } from "./RepoBrowser";
 import { RepoPracticeLibrary } from "./RepoPracticeLibrary";
 import "../labs.css";
 import "../dashboard-library.css";
 import "../repo-prep.css";
+import "../interview-campaigns.css";
 
 export { extractRepoFromModule } from "../repoReference";
 
@@ -409,6 +424,13 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
   const [interviews, setInterviews] = useState<MockInterviewSummary[]>([]);
   const [models, setModels] = useState<OllamaModel[]>([]);
 
+  // Interview Campaigns state
+  const [campaigns, setCampaigns] = useState<InterviewCampaignSummary[]>([]);
+  const [activeCampaign, setActiveCampaign] = useState<InterviewCampaignDetail | null>(null);
+  const [loadingCampaignId, setLoadingCampaignId] = useState<string | null>(null);
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const [usernameInput, setUsernameInput] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [customRepo, setCustomRepo] = useState("");
@@ -434,16 +456,26 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
     }
   };
 
+  const loadCampaigns = async () => {
+    try {
+      const res = await api.campaigns();
+      setCampaigns(res.campaigns || []);
+    } catch {
+      // keep existing state if campaigns endpoint unavailable
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const loadAll = async () => {
       setLoadingRepos(true);
       try {
-        const [st, pk, ol, iv] = await Promise.all([
+        const [st, pk, ol, iv, cp] = await Promise.all([
           api.githubStatus(),
           api.githubStudyPacks(),
           api.ollamaModels(),
           api.interviews().catch(() => ({ interviews: [] as MockInterviewSummary[] })),
+          api.campaigns().catch(() => ({ campaigns: [] as InterviewCampaignSummary[] })),
         ]);
         if (!active) return;
 
@@ -451,6 +483,7 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
         setPacks(pk.packs || []);
         setModels(ol.models || []);
         setInterviews(normalizeInterviews(iv.interviews));
+        setCampaigns(cp.campaigns || []);
         if (ol.models && ol.models.length > 0) {
           setSelectedModel((prev) =>
             prev && ol.models.some((m) => m.name === prev) ? prev : ol.models[0].name
@@ -498,6 +531,53 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
     }
     return map;
   }, [interviews]);
+
+  const openCampaign = async (campaignId: string) => {
+    setLoadingCampaignId(campaignId);
+    setError(null);
+    try {
+      const detail = await api.campaign(campaignId);
+      setActiveCampaign(detail);
+      window.scrollTo(0, 0);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load interview study plan");
+    } finally {
+      setLoadingCampaignId(null);
+    }
+  };
+
+  const handleCampaignCreated = (created: InterviewCampaignDetail) => {
+    setShowNewCampaign(false);
+    setCampaigns((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+    setActiveCampaign(created);
+    onUpdated();
+    window.scrollTo(0, 0);
+  };
+
+  const handleCampaignUpdated = (updated: InterviewCampaignDetail) => {
+    setActiveCampaign(updated);
+    setCampaigns((prev) =>
+      prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
+    );
+  };
+
+  const handleDeleteCampaign = async (campaignId: string) => {
+    if (confirmDeleteId !== campaignId) {
+      setConfirmDeleteId(campaignId);
+      return;
+    }
+    setConfirmDeleteId(null);
+    try {
+      await api.deleteCampaign(campaignId);
+      setCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
+      if (activeCampaign?.id === campaignId) {
+        setActiveCampaign(null);
+      }
+      onUpdated();
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete interview campaign");
+    }
+  };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -597,6 +677,42 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
   const isBusy = Boolean(busyRepo) || Boolean(startingMockRepo);
   const trimmedRepo = customRepo.trim();
 
+  // Active Interview Campaign Workspace inside /repos
+  if (activeCampaign) {
+    return (
+      <>
+        <InterviewCampaignView
+          campaign={activeCampaign}
+          selectedModel={useOllama ? selectedModel || undefined : undefined}
+          onBack={() => {
+            setActiveCampaign(null);
+            void loadCampaigns();
+            void loadInterviews();
+          }}
+          onUpdated={() => {
+            onUpdated();
+            void loadInterviews();
+          }}
+          onCampaignChange={handleCampaignUpdated}
+          onSelectRepo={(repoFullName) => {
+            setActiveCampaign(null);
+            setCustomRepo(repoFullName);
+            window.setTimeout(() => repoInputRef.current?.focus(), 0);
+          }}
+          renderMockPanel={(panelProps) => <MockInterviewPanel {...panelProps} />}
+        />
+        <NewCampaignModal
+          open={showNewCampaign}
+          repos={repos}
+          models={models}
+          defaultModel={selectedModel || undefined}
+          onClose={() => setShowNewCampaign(false)}
+          onCreated={handleCampaignCreated}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="repo-prep">
       {/* Live Conversational Staff-Engineer Mock Interviewer */}
@@ -612,6 +728,143 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
           onRestart={(repo) => void startMockInterview(repo)}
         />
       )}
+
+      {/* Reusable Time-Boxed Interview Campaigns */}
+      <section
+        className="card campaigns-section"
+        data-testid="interview-campaigns-section"
+        aria-labelledby="campaigns-heading"
+      >
+        <div className="campaigns-header">
+          <div className="campaigns-title-group">
+            <CalendarClock size={18} aria-hidden="true" />
+            <h3 id="campaigns-heading">Interview campaigns</h3>
+            {campaigns.length > 0 && (
+              <span className="badge badge-kind">{campaigns.length} active</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowNewCampaign(true)}
+            data-testid="new-campaign-btn"
+          >
+            + New Interview Campaign
+          </button>
+        </div>
+
+        {campaigns.length === 0 ? (
+          <p className="campaigns-empty-text">
+            Turn an upcoming interview date, resume, and prep brief into a calm day-by-day active-recall schedule with spoken countdown timers and a 1-page pre-call skim sheet.
+          </p>
+        ) : (
+          <div className="campaign-list">
+            {campaigns.map((camp) => {
+              const pct = Math.round(camp.readiness_pct || 0);
+              const fillColor =
+                pct >= 80
+                  ? "var(--green-solid)"
+                  : pct >= 45
+                  ? "var(--accent)"
+                  : "var(--amber)";
+              return (
+                <article
+                  key={camp.id}
+                  className="campaign-card"
+                  data-testid={`campaign-card-${camp.id}`}
+                >
+                  <div className="campaign-card-top">
+                    <div className="campaign-card-heading">
+                      <strong>{camp.company}</strong>
+                      <span className="campaign-role">{camp.role}</span>
+                    </div>
+                    <div className="campaign-badges">
+                      <span className="campaign-countdown">
+                        <Clock size={12} aria-hidden="true" />
+                        {formatCountdown(camp.hours_until)}
+                      </span>
+                      <span className="badge badge-unstarted">{camp.duration_minutes} min</span>
+                    </div>
+                  </div>
+
+                  <div className="campaign-meta-line">
+                    <span className="campaign-meta-item">
+                      <Calendar size={13} aria-hidden="true" />
+                      {formatInterviewDate(camp.interview_at)}
+                    </span>
+                    {camp.interviewer_name && <span>· {camp.interviewer_name}</span>}
+                    <span>· ~{camp.remaining_minutes} min remaining</span>
+                  </div>
+
+                  <div className="campaign-readiness-row">
+                    <div className="campaign-readiness-label">
+                      <span>Readiness</span>
+                      <strong>
+                        {pct}% ({camp.mastered_items}/{camp.total_items} drills ready)
+                      </strong>
+                    </div>
+                    <div
+                      className="progress-track"
+                      role="progressbar"
+                      aria-label={`${camp.company} readiness`}
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${pct}%`, background: fillColor }}
+                      />
+                    </div>
+                  </div>
+
+                  {camp.next_item_title && (
+                    <p className="campaign-next-item">
+                      Next up: <span>{camp.next_item_title}</span>
+                    </p>
+                  )}
+
+                  <div className="campaign-card-actions">
+                    <div className="campaign-card-actions-left">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={loadingCampaignId === camp.id}
+                        onClick={() => void openCampaign(camp.id)}
+                        data-testid={`open-campaign-${camp.id}`}
+                      >
+                        {loadingCampaignId === camp.id ? "Opening…" : "Open Study Plan"}
+                      </button>
+                      {camp.meeting_url && (
+                        <a
+                          href={camp.meeting_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-sm campaign-meeting-link"
+                        >
+                          <Video size={13} aria-hidden="true" /> Open Meeting{" "}
+                          <ExternalLink size={11} aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="campaign-card-actions-right">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => void handleDeleteCampaign(camp.id)}
+                        aria-label={`Delete ${camp.company} campaign`}
+                      >
+                        <Trash2 size={13} aria-hidden="true" />
+                        {confirmDeleteId === camp.id ? "Confirm delete" : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Focused Primary Repo Interview Prep Card */}
       <section className="card repo-prep-hero" aria-labelledby="repo-prep-heading">
@@ -759,7 +1012,7 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
                 id="github-username-input"
                 type="text"
                 className="input-field"
-                placeholder="e.g. lupenox"
+                placeholder="e.g. octocat"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 autoComplete="username"
@@ -840,6 +1093,16 @@ export function RepoInterviewView({ onOpenModule, onUpdated }: Props) {
           </p>
         </div>
       </details>
+
+      {/* Reusable "+ New Interview Campaign" Wizard Modal */}
+      <NewCampaignModal
+        open={showNewCampaign}
+        repos={repos}
+        models={models}
+        defaultModel={selectedModel || undefined}
+        onClose={() => setShowNewCampaign(false)}
+        onCreated={handleCampaignCreated}
+      />
     </div>
   );
 }

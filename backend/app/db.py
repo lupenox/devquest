@@ -125,6 +125,43 @@ CREATE TABLE IF NOT EXISTS mock_interviews (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS interview_campaigns (
+    id TEXT PRIMARY KEY,
+    company TEXT NOT NULL,
+    role TEXT NOT NULL,
+    interview_at TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL DEFAULT 30,
+    daily_minutes INTEGER NOT NULL DEFAULT 35,
+    meeting_url TEXT NOT NULL DEFAULT '',
+    interviewer_name TEXT NOT NULL DEFAULT '',
+    interviewer_notes TEXT NOT NULL DEFAULT '',
+    mission_notes TEXT NOT NULL DEFAULT '',
+    resume_filename TEXT NOT NULL DEFAULT '',
+    resume_text TEXT NOT NULL DEFAULT '',
+    prep_brief_text TEXT NOT NULL DEFAULT '',
+    linked_repos_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS campaign_items (
+    id TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL REFERENCES interview_campaigns(id) ON DELETE CASCADE,
+    day_number INTEGER NOT NULL DEFAULT 1,
+    day_label TEXT NOT NULL,
+    category TEXT NOT NULL,
+    title TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    key_points_json TEXT NOT NULL DEFAULT '[]',
+    target_seconds INTEGER NOT NULL DEFAULT 60,
+    estimated_minutes INTEGER NOT NULL DEFAULT 5,
+    confidence TEXT NOT NULL DEFAULT 'unreviewed',
+    practice_count INTEGER NOT NULL DEFAULT 0,
+    order_index INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT ''
+);
 """
 
 
@@ -509,6 +546,10 @@ def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
     completed_total = sum(act_done.values())
     activities_total = sum(act_totals.values())
 
+    from .interview_campaigns import get_upcoming_campaign
+
+    upcoming_campaign = get_upcoming_campaign(conn)
+
     return {
         "total_xp": total_xp,
         "level": level,
@@ -522,6 +563,7 @@ def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
         "total_activities": activities_total,
         "achievements": list_achievements(conn),
         "daily_warmup": daily_warmup,
+        "upcoming_campaign": upcoming_campaign,
         "technologies": technologies,
         "due_reviews": [dict(r) for r in due_reviews],
         "recent_xp": [dict(r) for r in recent_xp],

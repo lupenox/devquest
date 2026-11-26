@@ -165,6 +165,7 @@ export interface DashboardData {
   rank_title?: string;
   achievements?: AchievementItem[];
   daily_warmup?: DailyWarmupItem[];
+  upcoming_campaign?: InterviewCampaignSummary | null;
   technologies: Technology[];
   due_reviews: {
     activity_id: string;
@@ -371,4 +372,90 @@ export interface MockInterviewAnswerResp {
   readiness_score: number;
   xp_awarded?: number;
   unlocked_achievements?: UnlockedAchievement[];
+}
+
+export type CampaignConfidence = "unreviewed" | "shaky" | "ready" | "nailed";
+
+export interface CampaignItem {
+  id: string;
+  campaign_id: string;
+  day_number: number;
+  day_label: string;
+  category: string;
+  title: string;
+  prompt: string;
+  key_points: string[];
+  target_seconds: number;
+  estimated_minutes: number;
+  confidence: CampaignConfidence;
+  practice_count: number;
+  order_index: number;
+  notes: string;
+}
+
+export interface CampaignDayGroup {
+  day_number: number;
+  day_label: string;
+  estimated_minutes: number;
+  remaining_minutes?: number;
+  completed_count?: number;
+  total_count?: number;
+  items: CampaignItem[];
+}
+
+export interface InterviewCampaignSummary {
+  id: string;
+  company: string;
+  role: string;
+  interview_at: string;
+  duration_minutes: number;
+  daily_minutes: number;
+  meeting_url: string;
+  interviewer_name: string;
+  status: string;
+  readiness_pct: number;
+  total_items: number;
+  mastered_items: number;
+  total_minutes: number;
+  remaining_minutes: number;
+  hours_until: number;
+  next_item_title?: string | null;
+}
+
+export interface InterviewCampaignDetail extends InterviewCampaignSummary {
+  interviewer_notes: string;
+  mission_notes: string;
+  resume_filename: string;
+  resume_text: string;
+  prep_brief_text: string;
+  linked_repos: string[];
+  items: CampaignItem[];
+  days?: CampaignDayGroup[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCampaignReq {
+  company: string;
+  role: string;
+  interview_at: string;
+  duration_minutes?: number;
+  daily_minutes?: number;
+  meeting_url?: string;
+  interviewer_name?: string;
+  interviewer_notes?: string;
+  mission_notes?: string;
+  resume_filename?: string;
+  resume_text?: string;
+  prep_brief_text?: string;
+  linked_repos?: string[];
+  use_ollama?: boolean;
+  model?: string | null;
+}
+
+export interface ParseResumeResp {
+  filename: string;
+  text: string;
+  char_count: number;
+  preview: string;
 }

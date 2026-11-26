@@ -1,4 +1,5 @@
-import { ArrowRight, ChevronDown, Clock, Shield, Sparkles, Timer } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, Clock, Shield, Sparkles, Timer } from "lucide-react";
+import { pushRoute } from "../router";
 import type { DashboardData } from "../types";
 import { RichText } from "./RichText";
 import { DashboardLibrary } from "./DashboardLibrary";
@@ -10,6 +11,17 @@ interface Props {
   onOpenModule: (moduleId: string) => void;
   onGoToForge: () => void;
   onStartSprint?: (durationMinutes?: number) => void;
+  onOpenRepos?: () => void;
+}
+
+function formatCountdown(hoursUntil: number): string {
+  if (!Number.isFinite(hoursUntil) || hoursUntil <= 0) return "Today";
+  if (hoursUntil < 1) return "Today (<1h left)";
+  if (hoursUntil < 24) return `Today · ${Math.ceil(hoursUntil)}h left`;
+  const days = Math.floor(hoursUntil / 24);
+  const remHours = Math.round(hoursUntil % 24);
+  if (remHours === 24) return `${days + 1}d left`;
+  return remHours > 0 ? `${days}d ${remHours}h left` : `${days}d left`;
 }
 
 export function fallbackRankTitle(level: number): string {
@@ -26,11 +38,21 @@ function drillTitle(item: { title: string }) {
   return <RichText text={item.title.replace(/^Participation Activity:\s*/i, "")} />;
 }
 
-export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, onStartSprint }: Props) {
+export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, onStartSprint, onOpenRepos }: Props) {
   const practice: Practice[] = data.daily_warmup?.length ? data.daily_warmup : data.recommended_next;
   const [next, ...more] = practice;
   const goalPct = Math.min(100, Math.round(data.today_xp / Math.max(1, data.daily_xp_target) * 100));
   const rankTitle = data.rank_title || fallbackRankTitle(data.level);
+  const upcoming = data.upcoming_campaign ?? null;
+
+  const openRepos = () => {
+    if (onOpenRepos) {
+      onOpenRepos();
+      return;
+    }
+    pushRoute({ tab: "repos", techSlug: null, moduleId: null });
+    window.dispatchEvent(new Event("popstate"));
+  };
 
   function practiceMeta(item: Practice) {
     const tech = data.technologies.find((t) => t.slug === item.tech_slug)?.name || item.tech_slug;
@@ -48,6 +70,72 @@ export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, o
 
   return (
     <div className="dashboard-home">
+      {upcoming && (
+        <section
+          className="card upcoming-interview-banner"
+          aria-labelledby="upcoming-interview-heading"
+          data-testid="upcoming-interview-banner"
+        >
+          <div className="upcoming-interview-main">
+            <div className="upcoming-interview-eyebrow">
+              <span className="upcoming-pill">
+                <Calendar size={14} aria-hidden="true" /> Upcoming interview
+              </span>
+              <span className="upcoming-countdown">{formatCountdown(upcoming.hours_until)}</span>
+              {upcoming.duration_minutes > 0 && (
+                <span className="upcoming-meta-chip">{upcoming.duration_minutes} min</span>
+              )}
+            </div>
+            <h2 id="upcoming-interview-heading">
+              {upcoming.company} — {upcoming.role}
+            </h2>
+            <p className="upcoming-interview-next">
+              {upcoming.next_item_title ? (
+                <>
+                  Next study item: <strong>{upcoming.next_item_title}</strong>
+                </>
+              ) : (
+                <>
+                  {upcoming.mastered_items}/{upcoming.total_items} drills ready
+                </>
+              )}
+              {upcoming.interviewer_name ? ` · with ${upcoming.interviewer_name}` : ""}
+            </p>
+          </div>
+
+          <div className="upcoming-interview-side">
+            <div className="upcoming-readiness">
+              <div className="goal-label">
+                <span>Readiness</span>
+                <strong>{Math.round(upcoming.readiness_pct)}%</strong>
+              </div>
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-label="Upcoming interview readiness"
+                aria-valuenow={Math.round(upcoming.readiness_pct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={`${Math.round(upcoming.readiness_pct)}%`}
+              >
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, Math.round(upcoming.readiness_pct)))}%`,
+                    background: "linear-gradient(90deg, var(--accent), var(--green-solid))",
+                  }}
+                />
+              </div>
+              <small className="muted">
+                {upcoming.mastered_items}/{upcoming.total_items} drills ready
+              </small>
+            </div>
+            <button type="button" className="btn btn-primary upcoming-interview-cta" onClick={openRepos}>
+              Study Interview Plan <ArrowRight size={15} aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      )}
       <div className="dashboard-today">
         <section className="practice-panel" aria-labelledby="practice-heading" data-testid="daily-warmup-list">
           <header className="practice-caption">

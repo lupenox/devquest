@@ -1,9 +1,14 @@
 import type {
   Activity,
+  CampaignConfidence,
+  CampaignItem,
+  CreateCampaignReq,
   DashboardData,
   GitHubRepo,
   GitHubStatus,
   GradeOutcome,
+  InterviewCampaignDetail,
+  InterviewCampaignSummary,
   LaunchWorkspaceResp,
   MockInterviewAnswerResp,
   MockInterviewStartResp,
@@ -12,6 +17,7 @@ import type {
   ModuleSummary,
   OllamaModel,
   OpenTerminalResp,
+  ParseResumeResp,
   RegexPlaygroundResp,
   SearchResults,
   SkillTreeNode,
@@ -96,6 +102,52 @@ export const api = {
     req<MockInterviewAnswerResp>(`/api/interviews/${encodeURIComponent(String(sessionId))}/answer`, {
       method: "POST",
       body: JSON.stringify({ answer, model: model || null }),
+    }),
+  campaigns: () => req<{ campaigns: InterviewCampaignSummary[] }>("/api/campaigns"),
+  campaign: (id: string) =>
+    req<InterviewCampaignDetail>(`/api/campaigns/${encodeURIComponent(id)}`),
+  createCampaign: (payload: CreateCampaignReq) =>
+    req<InterviewCampaignDetail>("/api/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  parseResume: async (file: File): Promise<ParseResumeResp> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/campaigns/parse-resume", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<ParseResumeResp>;
+  },
+  practiceCampaignItem: (
+    campaignId: string,
+    itemId: string,
+    confidence: CampaignConfidence,
+    notes?: string
+  ) =>
+    req<{ item: CampaignItem; campaign: InterviewCampaignSummary; xp_awarded: number }>(
+      `/api/campaigns/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/practice`,
+      {
+        method: "POST",
+        body: JSON.stringify(notes !== undefined ? { confidence, notes } : { confidence }),
+      }
+    ),
+  startCampaignMock: (campaignId: string, model?: string) =>
+    req<MockInterviewStartResp>(
+      `/api/campaigns/${encodeURIComponent(campaignId)}/mock-interview`,
+      {
+        method: "POST",
+        body: JSON.stringify({ model: model || null }),
+      }
+    ),
+  deleteCampaign: (campaignId: string) =>
+    req<{ deleted: string }>(`/api/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: "DELETE",
     }),
   saveProfile: (provider: string, handle: string) =>
     req<{ provider: string; handle: string }>("/api/sync/profile", {

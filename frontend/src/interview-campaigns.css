@@ -1,0 +1,1072 @@
+/* Reusable Interview Campaigns — Active-Recall Drills, Spoken Timers & Skim Sheet */
+
+/* ── Campaigns Section on /repos ──────────────────────────────────────────── */
+.card.campaigns-section {
+  padding: clamp(1rem, 2.4vw, 1.65rem);
+  border-left: 4px solid var(--accent-2);
+  background: linear-gradient(
+    145deg,
+    var(--bg-card) 0%,
+    color-mix(in srgb, var(--accent-2) 8%, var(--bg-surface)) 100%
+  );
+}
+
+.campaigns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+}
+
+.campaigns-title-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.campaigns-title-group > svg {
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+
+.campaigns-title-group h3 {
+  margin: 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.campaigns-empty-text {
+  margin: 0.65rem 0 0;
+  font-size: 0.87rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.campaign-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.campaign-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.95rem 1.05rem;
+  border-radius: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.campaign-card:hover {
+  border-color: var(--accent);
+}
+
+.campaign-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+}
+
+.campaign-card-heading {
+  min-width: 0;
+  flex: 1 1 13rem;
+}
+
+.campaign-card-heading strong {
+  display: block;
+  font-size: 0.98rem;
+  color: var(--text);
+}
+
+.campaign-role {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.campaign-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.campaign-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.74rem;
+  font-weight: 750;
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.campaign-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.campaign-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+}
+
+.campaign-readiness-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.3rem;
+}
+
+.campaign-readiness-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.campaign-readiness-label strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-readiness-row .progress-track {
+  margin: 0;
+  height: 8px;
+}
+
+.campaign-next-item {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.campaign-next-item span {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.campaign-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.campaign-card-actions-left,
+.campaign-card-actions-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ── Active Campaign Workspace ────────────────────────────────────────────── */
+.campaign-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.campaign-workspace > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.campaign-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.card.campaign-hero {
+  padding: clamp(1rem, 2.5vw, 1.85rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  border-left: 4px solid var(--accent);
+}
+
+.campaign-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+}
+
+.campaign-hero-title {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.campaign-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.campaign-hero-title h2 {
+  margin: 0.35rem 0 0.3rem;
+  font-size: clamp(1.3rem, 2.7vw, 1.85rem);
+  line-height: 1.2;
+  letter-spacing: -0.028em;
+  overflow-wrap: anywhere;
+}
+
+.campaign-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.campaign-meeting-link {
+  text-decoration: none;
+}
+
+.campaign-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+}
+
+.campaign-context-box {
+  padding: 0.78rem 0.92rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.campaign-context-box h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.campaign-context-box p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.campaign-linked-repos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.campaign-repo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 99px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.campaign-repo-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Time-Boxed Day Tabs ──────────────────────────────────────────────────── */
+.campaign-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.campaign-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  max-width: 100%;
+  text-align: left;
+}
+
+.campaign-tab:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.campaign-tab.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.campaign-tab-meta {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.campaign-tab.active .campaign-tab-meta {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--text);
+}
+
+.campaign-day-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.84rem;
+}
+
+.campaign-day-banner strong {
+  color: var(--text);
+}
+
+.campaign-day-banner span {
+  color: var(--text-muted);
+}
+
+/* ── Active-Recall Drill Cards ────────────────────────────────────────────── */
+.drill-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+}
+
+.card.drill-card {
+  padding: clamp(0.95rem, 2.2vw, 1.35rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+  border-left: 4px solid var(--border);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card.drill-card.conf-shaky { border-left-color: var(--amber); }
+.card.drill-card.conf-ready { border-left-color: var(--accent); }
+.card.drill-card.conf-nailed { border-left-color: var(--green-solid); }
+
+.drill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.7rem;
+}
+
+.drill-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.drill-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.drill-cat-badge.cat-pitch {
+  background: color-mix(in srgb, var(--accent-2) 20%, transparent);
+  color: var(--accent-2);
+}
+
+.drill-cat-badge.cat-debug {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  color: var(--red);
+}
+
+.drill-cat-badge.cat-gap {
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
+  color: var(--amber);
+}
+
+.drill-cat-badge.cat-ask {
+  background: color-mix(in srgb, var(--green-solid) 18%, transparent);
+  color: var(--green);
+}
+
+.drill-target-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--text-muted);
+  padding: 0.16rem 0.52rem;
+  border-radius: 99px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.drill-title {
+  margin: 0;
+  font-size: 1.03rem;
+  line-height: 1.32;
+  color: var(--text);
+}
+
+.drill-prompt {
+  margin: 0;
+  font-size: 0.89rem;
+  line-height: 1.56;
+  color: var(--text-muted);
+}
+
+/* ── Spoken-Answer Countdown Timer ────────────────────────────────────────── */
+.drill-timer-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.72rem 0.88rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.drill-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.drill-timer-readout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.96rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.drill-timer-readout.warn { color: var(--amber); }
+.drill-timer-readout.expired { color: var(--red); }
+
+.drill-timer-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.drill-timer-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.drill-timer-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--green-solid));
+  transition: width 0.35s linear;
+}
+
+.drill-timer-fill.warn { background: var(--amber); }
+.drill-timer-fill.expired { background: var(--red); }
+
+.drill-timer-status {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--red);
+}
+
+/* ── Active-Recall Reveal Talking Points ──────────────────────────────────── */
+.drill-reveal-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.drill-reveal-btn {
+  justify-self: start;
+}
+
+.drill-key-points {
+  margin: 0;
+  padding: 0.75rem 0.95rem 0.75rem 1.85rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-subtle));
+  display: grid;
+  gap: 0.42rem;
+  font-size: 0.87rem;
+  line-height: 1.52;
+  color: var(--text);
+}
+
+/* ── Personal Notes & Confidence Self-Rating ──────────────────────────────── */
+.drill-notes-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.32rem;
+}
+
+.drill-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.drill-notes-field label {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.drill-notes-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  resize: vertical;
+  padding: 0.55rem 0.72rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.drill-notes-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.drill-rating-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.drill-rating-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.drill-xp-pop {
+  color: var(--green);
+  font-weight: 750;
+}
+
+.drill-confidence-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.drill-conf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+
+.drill-conf-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.drill-conf-btn[aria-pressed="true"].lvl-unreviewed {
+  border-color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 18%, var(--bg-elev));
+  color: var(--text);
+}
+
+.drill-conf-btn[aria-pressed="true"].lvl-shaky {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 20%, var(--bg-elev));
+  color: var(--amber);
+}
+
+.drill-conf-btn[aria-pressed="true"].lvl-ready {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-elev));
+  color: var(--accent);
+}
+
+.drill-conf-btn[aria-pressed="true"].lvl-nailed {
+  border-color: var(--green-solid);
+  background: color-mix(in srgb, var(--green-solid) 22%, var(--bg-elev));
+  color: var(--green);
+}
+
+/* ── 1-Page Skim Cheat Sheet ──────────────────────────────────────────────── */
+.card.skim-sheet {
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.skim-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.skim-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.skim-header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.skim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 0.85rem;
+}
+
+.skim-item {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skim-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.skim-item h4 {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--text);
+}
+
+.skim-points {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.83rem;
+  line-height: 1.48;
+  color: var(--text);
+}
+
+.skim-note {
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 7px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ── Reusable New Interview Campaign Modal Wizard ─────────────────────────── */
+.campaign-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(4, 12, 20, 0.66);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+}
+
+.campaign-modal {
+  width: 100%;
+  max-width: 46rem;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
+  padding: clamp(1rem, 2.5vw, 1.65rem);
+  min-width: 0;
+}
+
+.campaign-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.85rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.campaign-modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.campaign-modal-header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.campaign-wizard-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+}
+
+.campaign-wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+}
+
+.campaign-budget-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.campaign-preset-chip {
+  padding: 0.22rem 0.55rem;
+  border-radius: 99px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.campaign-preset-chip.active,
+.campaign-preset-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
+}
+
+.campaign-upload-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--bg-surface);
+}
+
+.campaign-upload-box input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.campaign-upload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--green);
+  overflow-wrap: anywhere;
+}
+
+.campaign-wizard-textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  resize: vertical;
+  padding: 0.58rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-code);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.48;
+}
+
+.campaign-wizard-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.campaign-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── Frutiger Aero Harmonization ──────────────────────────────────────────── */
+[data-theme="frutiger-aero"] .card.campaigns-section {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(232, 252, 245, 0.8) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.92);
+  border-left: 4px solid #16a34a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 10px 26px rgba(11, 78, 114, 0.13);
+}
+
+[data-theme="frutiger-aero"] .campaign-card,
+[data-theme="frutiger-aero"] .campaign-context-box,
+[data-theme="frutiger-aero"] .campaign-day-banner,
+[data-theme="frutiger-aero"] .drill-timer-box,
+[data-theme="frutiger-aero"] .skim-item,
+[data-theme="frutiger-aero"] .campaign-upload-box {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(236, 250, 255, 0.84));
+  border-color: rgba(14, 116, 144, 0.22);
+}
+
+[data-theme="frutiger-aero"] .campaign-countdown {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(217, 119, 6, 0.42);
+  color: #92400e;
+}
+
+[data-theme="frutiger-aero"] .drill-cat-badge {
+  background: rgba(2, 132, 199, 0.15);
+  color: #0369a1;
+}
+
+[data-theme="frutiger-aero"] .drill-cat-badge.cat-pitch {
+  background: rgba(22, 163, 74, 0.16);
+  color: #14532d;
+}
+
+[data-theme="frutiger-aero"] .drill-cat-badge.cat-debug {
+  background: rgba(225, 29, 72, 0.14);
+  color: #9f1239;
+}
+
+[data-theme="frutiger-aero"] .drill-cat-badge.cat-gap {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+[data-theme="frutiger-aero"] .drill-cat-badge.cat-ask {
+  background: rgba(8, 145, 178, 0.16);
+  color: #155e75;
+}
+
+[data-theme="frutiger-aero"] .drill-key-points {
+  background: rgba(240, 249, 255, 0.92);
+  border-color: rgba(2, 132, 199, 0.28);
+  color: #0b2540;
+}
+
+[data-theme="frutiger-aero"] .drill-notes-input,
+[data-theme="frutiger-aero"] .campaign-wizard-textarea {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b2540;
+  border-color: rgba(2, 132, 199, 0.34);
+  color-scheme: light;
+}
+
+[data-theme="frutiger-aero"] .drill-conf-btn {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(14, 116, 144, 0.25);
+  color: #1e425e;
+}
+
+[data-theme="frutiger-aero"] .drill-conf-btn[aria-pressed="true"].lvl-shaky {
+  background: rgba(254, 243, 199, 0.95);
+  border-color: #d97706;
+  color: #92400e;
+}
+
+[data-theme="frutiger-aero"] .drill-conf-btn[aria-pressed="true"].lvl-ready {
+  background: rgba(224, 242, 254, 0.95);
+  border-color: #0284c7;
+  color: #0369a1;
+}
+
+[data-theme="frutiger-aero"] .drill-conf-btn[aria-pressed="true"].lvl-nailed {
+  background: rgba(220, 252, 231, 0.95);
+  border-color: #16a34a;
+  color: #14532d;
+}
+
+[data-theme="frutiger-aero"] .campaign-tab {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(14, 116, 144, 0.24);
+  color: #2d5572;
+}
+
+[data-theme="frutiger-aero"] .campaign-tab.active {
+  background: linear-gradient(180deg, rgba(224, 242, 254, 0.96), rgba(186, 230, 253, 0.88));
+  border-color: #0284c7;
+  color: #0b2540;
+}
+
+[data-theme="frutiger-aero"] .campaign-modal-backdrop {
+  background: rgba(11, 56, 84, 0.42);
+}
+
+[data-theme="frutiger-aero"] .campaign-modal {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(236, 251, 255, 0.95));
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 24px 60px rgba(11, 78, 114, 0.28);
+}
+
+[data-theme="emerald-3d"] .campaign-modal {
+  background: linear-gradient(165deg, rgba(15, 50, 42, 0.94) 0%, rgba(6, 24, 21, 0.97) 100%);
+  border-color: rgba(110, 231, 183, 0.32);
+}
+
+/* ── Compact / 320px Mobile Viewport Hardening ────────────────────────────── */
+@media (max-width: 520px) {
+  .drill-confidence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campaign-hero-actions .btn,
+  .campaign-modal-footer .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .campaign-tab {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drill-timer-fill,
+  .campaign-card,
+  .campaign-tab,
+  .drill-conf-btn {
+    transition: none;
+  }
+}

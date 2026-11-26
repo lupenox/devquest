@@ -13,7 +13,7 @@ test("select a connected repository and use the shared interview prep actions", 
   }));
   const pack = {
     id: "repo-interview-example-project-40", kind: "repo_interview",
-    title: "Interview Prep: example/project-40", tech_slug: "typescript",
+    title: "Interview Prep: example/project-40", subtitle: "", tech_slug: "typescript",
     content: { sections: [], external_resources: [] },
     activity_count: 3, completed_count: 1,
   };

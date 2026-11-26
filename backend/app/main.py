@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -26,6 +26,15 @@ from .graders import (
     materialize_workspace,
     run_regex_playground,
     run_sql_playground,
+)
+from .interview_campaigns import (
+    create_campaign,
+    delete_campaign,
+    extract_resume_text,
+    get_campaign_detail,
+    list_campaigns,
+    record_item_practice,
+    start_campaign_mock_interview,
 )
 from .mock_interview import answer_mock_question, list_mock_interviews, start_mock_interview
 from .ollama_gen import generate_zybooks_module, list_ollama_models
@@ -161,6 +170,35 @@ class MockInterviewStartReq(BaseModel):
 
 class MockInterviewAnswerReq(BaseModel):
     answer: str
+    model: str | None = None
+
+
+class CreateCampaignReq(BaseModel):
+    id: str | None = None
+    company: str
+    role: str
+    interview_at: str
+    duration_minutes: int = Field(default=30, ge=5, le=240)
+    daily_minutes: int = Field(default=35, ge=10, le=240)
+    meeting_url: str = ""
+    interviewer_name: str = ""
+    interviewer_notes: str = ""
+    mission_notes: str = ""
+    resume_filename: str = ""
+    resume_text: str = ""
+    prep_brief_text: str = ""
+    linked_repos: list[str] = Field(default_factory=list)
+    use_ollama: bool = False
+    model: str | None = None
+    items: list[dict[str, Any]] | None = None
+
+
+class CampaignPracticeReq(BaseModel):
+    confidence: str
+    notes: str | None = None
+
+
+class CampaignMockReq(BaseModel):
     model: str | None = None
 
 
@@ -1044,6 +1082,111 @@ async def interview_answer(session_id: int, req: MockInterviewAnswerReq):
             },
         )
     await _broadcast_achievements(res.get("unlocked_achievements", []))
+    return res
+
+
+@app.get("/api/campaigns")
+def api_list_campaigns():
+    with get_conn() as conn:
+        return {"campaigns": list_campaigns(conn)}
+
+
+@app.post("/api/campaigns/parse-resume")
+async def api_parse_resume(file: UploadFile = File(...)):
+    filename = file.filename or "resume.txt"
+    raw_bytes = await file.read()
+    try:
+        text = extract_resume_text(filename, raw_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "filename": filename,
+        "text": text,
+        "char_count": len(text),
+        "preview": text[:400],
+    }
+
+
+@app.post("/api/campaigns")
+async def api_create_campaign(req: CreateCampaignReq):
+    with get_conn() as conn:
+        try:
+            detail = create_campaign(
+                conn,
+                campaign_id=req.id,
+                company=req.company,
+                role=req.role,
+                interview_at=req.interview_at,
+                duration_minutes=req.duration_minutes,
+                daily_minutes=req.daily_minutes,
+                meeting_url=req.meeting_url,
+                interviewer_name=req.interviewer_name,
+                interviewer_notes=req.interviewer_notes,
+                mission_notes=req.mission_notes,
+                resume_filename=req.resume_filename,
+                resume_text=req.resume_text,
+                prep_brief_text=req.prep_brief_text,
+                linked_repos=req.linked_repos,
+                use_ollama=req.use_ollama,
+                model=req.model,
+                items=req.items,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    await hub.broadcast("campaign_updated", {"campaign_id": detail["id"]})
+    return detail
+
+
+@app.get("/api/campaigns/{campaign_id}")
+def api_get_campaign(campaign_id: str):
+    with get_conn() as conn:
+        try:
+            return get_campaign_detail(conn, campaign_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/campaigns/{campaign_id}/items/{item_id}/practice")
+async def api_practice_campaign_item(campaign_id: str, item_id: str, req: CampaignPracticeReq):
+    with get_conn() as conn:
+        try:
+            res = record_item_practice(conn, campaign_id, item_id, req.confidence, notes=req.notes)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    await hub.broadcast(
+        "campaign_updated",
+        {
+            "campaign_id": campaign_id,
+            "item_id": item_id,
+            "readiness_pct": res["campaign"]["readiness_pct"],
+            "xp_awarded": res["xp_awarded"],
+        },
+    )
+    await _broadcast_achievements(res.get("unlocked_achievements", []))
+    return res
+
+
+@app.post("/api/campaigns/{campaign_id}/mock-interview")
+def api_start_campaign_mock(campaign_id: str, req: CampaignMockReq | None = None):
+    with get_conn() as conn:
+        try:
+            return start_campaign_mock_interview(conn, campaign_id, model=req.model if req else None)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/campaigns/{campaign_id}")
+async def api_delete_campaign(campaign_id: str):
+    with get_conn() as conn:
+        try:
+            res = delete_campaign(conn, campaign_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+    await hub.broadcast("campaign_updated", {"campaign_id": campaign_id, "deleted": True})
     return res
 
 

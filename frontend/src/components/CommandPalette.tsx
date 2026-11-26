@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
+  Calendar,
   Code2,
   FolderGit2,
   GitBranch,
@@ -128,6 +129,15 @@ export function CommandPalette({
         badge: "Sprint",
         keywords: "start 2 min quick sprint warmup",
         run: () => onNavigateTab("sprint", 2),
+      },
+      {
+        id: "action-campaigns",
+        group: "Quick Actions",
+        title: "Interview Campaigns & Study Plans",
+        subtitle: "Time-boxed daily prep plans, resume drills & tailored mock interviews",
+        badge: "Campaigns",
+        keywords: "interview campaigns study plans schedule resume prep mock",
+        run: () => onNavigateTab("repos"),
       },
       {
         id: "action-repos",
@@ -316,6 +326,7 @@ export function CommandPalette({
     if (item.group === "Activities") return <Code2 size={15} color="var(--green)" />;
     if (item.id.includes("sprint")) return <Zap size={15} color="var(--amber)" />;
     if (item.id.includes("theme")) return <Palette size={15} color="var(--accent-2)" />;
+    if (item.id.includes("campaigns")) return <Calendar size={15} color="var(--accent)" />;
     if (item.id.includes("repos")) return <FolderGit2 size={15} color="var(--cyan)" />;
     if (item.id.includes("sync")) return <RefreshCw size={15} color="var(--green)" />;
     if (item.id.includes("tree")) return <GitBranch size={15} color="var(--accent-2)" />;

@@ -644,7 +644,13 @@ def test_non_destructive_v1_schema_migration(tmp_path: Path, monkeypatch: pytest
             r["name"]
             for r in migrated.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
-        assert {"achievements", "sprint_sessions", "mock_interviews"}.issubset(tables)
+        assert {
+            "achievements",
+            "sprint_sessions",
+            "mock_interviews",
+            "interview_campaigns",
+            "campaign_items",
+        }.issubset(tables)
 
         py_row = migrated.execute("SELECT xp FROM technologies WHERE slug = 'python'").fetchone()
         assert int(py_row["xp"]) == 145
@@ -1176,5 +1182,237 @@ def test_spa_fallback_and_static_assets(isolated_env, tmp_path: Path, monkeypatc
     # Unknown API & missing assets still return 404 (not index.html)
     assert client.get("/api/nonexistent-endpoint").status_code == 404
     assert client.get("/assets/does-not-exist.js").status_code == 404
+
+
+def _make_minimal_pdf(text: str) -> bytes:
+    """Builds a tiny valid 1-page PDF containing `text` for pypdf extraction tests."""
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET\n".encode("latin-1")
+    objs = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+        f"4 0 obj\n<< /Length {len(stream)} >>\nstream\n".encode("latin-1") + stream + b"endstream\nendobj\n",
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objs:
+        offsets.append(len(out))
+        out.extend(obj)
+    xref_pos = len(out)
+    out.extend(f"xref\n0 {len(objs) + 1}\n".encode("latin-1"))
+    out.extend(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        out.extend(f"{off:010d} 00000 n \n".encode("latin-1"))
+    out.extend(
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("latin-1")
+    )
+    return bytes(out)
+
+
+def test_interview_campaign_pdf_schedule_practice_and_mock(isolated_env, monkeypatch: pytest.MonkeyPatch):
+    from datetime import timedelta
+
+    from app import mock_interview
+    from app.rpg import utcnow
+
+    monkeypatch.setattr(mock_interview, "list_ollama_models", lambda timeout=1.5: [])
+    client = TestClient(app)
+
+    # Dashboard starts with no upcoming campaign
+    assert client.get("/api/dashboard").json()["upcoming_campaign"] is None
+
+    # 1. Resume parsing: PDF + TXT + rejected binary
+    pdf_bytes = _make_minimal_pdf("Acme Candidate - Python FastAPI Voice Agent Engineer")
+    pdf_resp = client.post(
+        "/api/campaigns/parse-resume",
+        files={"file": ("candidate_resume.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert pdf_resp.status_code == 200
+    pdf_body = pdf_resp.json()
+    assert pdf_body["filename"] == "candidate_resume.pdf"
+    assert "Acme Candidate" in pdf_body["text"]
+    assert pdf_body["char_count"] == len(pdf_body["text"])
+    assert pdf_body["preview"] == pdf_body["text"][:400]
+
+    txt_resp = client.post(
+        "/api/campaigns/parse-resume",
+        files={"file": ("resume.md", b"# Projects\n- Voice Agent: Python + FastAPI + WebSockets\n", "text/markdown")},
+    )
+    assert txt_resp.status_code == 200 and "Voice Agent" in txt_resp.json()["text"]
+
+    bad_resp = client.post(
+        "/api/campaigns/parse-resume",
+        files={"file": ("avatar.png", b"\x89PNG\r\n", "image/png")},
+    )
+    assert bad_resp.status_code == 400
+
+    # 2. Create reusable time-boxed campaign for fictional Acme AI (~70 hours out)
+    interview_dt = (utcnow() + timedelta(hours=70)).isoformat()
+    create_resp = client.post(
+        "/api/campaigns",
+        json={
+            "company": "Acme AI",
+            "role": "SWE, Applied AI",
+            "interview_at": interview_dt,
+            "duration_minutes": 20,
+            "daily_minutes": 30,
+            "meeting_url": "https://meet.example.com/acme-r1",
+            "interviewer_name": "Alex Rivera (CTO)",
+            "interviewer_notes": "Focuses on architecture clarity, testing discipline, and calm debugging stories.",
+            "mission_notes": "Building reliable human-centered AI safety evaluation pipelines.",
+            "resume_filename": "candidate_resume.pdf",
+            "resume_text": pdf_body["text"] + "\nPROJECTS\n- Acme Voice Agent: Python, FastAPI, asyncio timers\n- Acme RAG Eval: hybrid dense + BM25 search with pytest CI\n",
+            "prep_brief_text": (
+                "## Prep Questions\n"
+                "- How did you test async pipelines offline without flaky API calls?\n"
+                "## Gaps\n"
+                "- Lighter Rust CLI experience — emphasize C++ systems background and fast week-1 ramp.\n"
+                "## Questions to Ask\n"
+                "- What is the biggest evaluation bottleneck for Acme AI this quarter?\n"
+            ),
+            "linked_repos": ["acme/voice-agent", "acme/rag-eval"],
+            "use_ollama": False,
+        },
+    )
+    assert create_resp.status_code == 200
+    camp = create_resp.json()
+    cid = camp["id"]
+    assert camp["company"] == "Acme AI"
+    assert camp["role"] == "SWE, Applied AI"
+    assert camp["duration_minutes"] == 20
+    assert camp["readiness_pct"] == 0.0
+    assert camp["hours_until"] > 60.0
+    assert len(camp["items"]) >= 5
+    day_numbers = {d["day_number"] for d in camp["days"]}
+    assert 0 in day_numbers and 1 in day_numbers
+    assert camp["days"][-1]["day_number"] == 0  # Morning skim appears last in day order
+    categories = {it["category"] for it in camp["items"]}
+    assert {"PITCH", "PROJECT", "DEBUG STORY", "GAP PREP", "ASK THEM"}.issubset(categories)
+
+    # 3. Dashboard exposes upcoming_campaign cleanly
+    dash = client.get("/api/dashboard").json()
+    up = dash["upcoming_campaign"]
+    assert up is not None
+    assert up["id"] == cid
+    assert up["company"] == "Acme AI"
+    assert up["readiness_pct"] == 0.0
+    assert up["next_item_title"] == camp["items"][0]["title"]
+
+    # List & get detail endpoints
+    listed = client.get("/api/campaigns").json()["campaigns"]
+    assert len(listed) == 1 and listed[0]["id"] == cid
+    fetched = client.get(f"/api/campaigns/{cid}").json()
+    assert fetched["id"] == cid and len(fetched["items"]) == len(camp["items"])
+    assert client.get("/api/campaigns/no-such-campaign").status_code == 404
+
+    # 4. Practice confidence progression, capped XP (no farming), notes persistence & readiness %
+    first_item_id = camp["items"][0]["id"]
+
+    p_shaky = client.post(
+        f"/api/campaigns/{cid}/items/{first_item_id}/practice",
+        json={"confidence": "shaky", "notes": "Tighten intro to 40 seconds"},
+    )
+    assert p_shaky.status_code == 200
+    b_shaky = p_shaky.json()
+    assert b_shaky["xp_awarded"] == 0
+    assert b_shaky["item"]["confidence"] == "shaky"
+    assert b_shaky["item"]["practice_count"] == 1
+    assert b_shaky["item"]["notes"] == "Tighten intro to 40 seconds"
+    assert b_shaky["campaign"]["readiness_pct"] > 0
+
+    p_ready = client.post(
+        f"/api/campaigns/{cid}/items/{first_item_id}/practice",
+        json={"confidence": "ready"},
+    ).json()
+    assert p_ready["xp_awarded"] == 10
+    assert p_ready["item"]["notes"] == "Tighten intro to 40 seconds"  # preserved when notes omitted
+    assert p_ready["campaign"]["mastered_items"] == 1
+
+    # Repeating ready grants 0 extra XP
+    p_ready_dup = client.post(
+        f"/api/campaigns/{cid}/items/{first_item_id}/practice",
+        json={"confidence": "ready"},
+    ).json()
+    assert p_ready_dup["xp_awarded"] == 0
+
+    # Upgrading ready -> nailed awards remaining +10 (20 total cap)
+    p_nailed = client.post(
+        f"/api/campaigns/{cid}/items/{first_item_id}/practice",
+        json={"confidence": "nailed"},
+    ).json()
+    assert p_nailed["xp_awarded"] == 10
+    assert p_nailed["campaign"]["readiness_pct"] > p_ready["campaign"]["readiness_pct"]
+
+    # Repeating nailed grants 0 extra XP (anti-farming cap)
+    p_nailed_dup = client.post(
+        f"/api/campaigns/{cid}/items/{first_item_id}/practice",
+        json={"confidence": "nailed"},
+    ).json()
+    assert p_nailed_dup["xp_awarded"] == 0
+
+    # Validation errors
+    assert client.post(f"/api/campaigns/{cid}/items/{first_item_id}/practice", json={"confidence": "bogus"}).status_code == 400
+    assert client.post(f"/api/campaigns/{cid}/items/missing-item/practice", json={"confidence": "ready"}).status_code == 404
+
+    # 5. Tailored Campaign Mock Interview compatible with MockInterviewPanel + answer_mock_question
+    mock_start = client.post(f"/api/campaigns/{cid}/mock-interview", json={})
+    assert mock_start.status_code == 200
+    ms = mock_start.json()
+    assert ms["repo_full_name"] == "Acme AI — SWE, Applied AI"
+    assert ms["total_questions"] == 4
+    assert ms["current_index"] == 0
+    assert "Acme AI" in ms["question"]["question"]
+    assert "Alex Rivera" in ms["question"]["question"]
+
+    mock_ans = client.post(
+        f"/api/interviews/{ms['session_id']}/answer",
+        json={
+            "answer": (
+                "First, I build Python and FastAPI AI systems like `acme/voice-agent` and `acme/rag-eval` "
+                "with deterministic pytest verification. I am excited by Acme AI's safety evaluation mission "
+                "because clear trade-offs around latency, fail-closed validation, and regression testing matter deeply."
+            )
+        },
+    )
+    assert mock_ans.status_code == 200
+    ma = mock_ans.json()
+    assert ma["rubric"]["total"] > 50
+    assert ma["next_question"]["index"] == 1
+    assert ma["completed"] is False
+
+    # 6. Pre-structured items creation + Delete campaign cleans up cleanly
+    custom_resp = client.post(
+        "/api/campaigns",
+        json={
+            "id": "acme-custom-seed",
+            "company": "Acme Labs",
+            "role": "Backend Engineer",
+            "interview_at": interview_dt,
+            "items": [
+                {
+                    "id": "acme-item-1",
+                    "day_number": 1,
+                    "day_label": "Day 1 — Core",
+                    "category": "PITCH",
+                    "title": "45s Pitch",
+                    "prompt": "Deliver pitch",
+                    "key_points": ["Point A", "Point B"],
+                    "target_seconds": 45,
+                    "estimated_minutes": 5,
+                }
+            ],
+        },
+    )
+    assert custom_resp.status_code == 200
+    assert len(custom_resp.json()["items"]) == 1
+    assert custom_resp.json()["items"][0]["id"] == "acme-item-1"
+
+    assert client.delete(f"/api/campaigns/{cid}").json() == {"deleted": cid}
+    assert client.delete("/api/campaigns/acme-custom-seed").json() == {"deleted": "acme-custom-seed"}
+    assert client.get(f"/api/campaigns/{cid}").status_code == 404
+    assert client.get("/api/dashboard").json()["upcoming_campaign"] is None
+
 
 

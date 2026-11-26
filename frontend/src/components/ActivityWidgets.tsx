@@ -28,6 +28,7 @@ import type {
   RegexPlaygroundResp,
   SqlPlaygroundResp,
 } from "../types";
+import { HighlightedLines, RichText, ZySectionBody } from "./RichText";
 import "../labs.css";
 
 interface WidgetProps {
@@ -56,7 +57,7 @@ export function ActivityCard({ activity, liveOutcome, onGraded }: WidgetProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {completed ? <CheckCircle2 size={18} color="#22c55e" /> : <Play size={16} color="#7aa2f7" />}
-          <strong>{activity.title}</strong>
+          <strong><RichText text={activity.title} /></strong>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <span className="badge badge-kind">{activity.activity_type.replace("_", " ")}</span>
@@ -94,7 +95,7 @@ export function ActivityCard({ activity, liveOutcome, onGraded }: WidgetProps) {
               ? `✓ Passed! +${outcome.xp_awarded} XP${outcome.par_bonus ? ` (+${outcome.par_bonus} Vim Par Bonus!)` : ""}`
               : "✗ Not quite yet"}
           </strong>
-          <div>{outcome.output}</div>
+          <div><RichText text={outcome.output} /></div>
         </div>
       )}
     </div>
@@ -119,7 +120,7 @@ function ReadCheckInner({ activity, onResult }: { activity: Activity; onResult: 
 
   return (
     <div>
-      <p style={{ marginTop: 0 }}>{activity.spec.question}</p>
+      <p className="activity-prompt"><RichText text={activity.spec.question || ""} /></p>
       {options.map((opt, idx) => (
         <button
           key={idx}
@@ -128,7 +129,7 @@ function ReadCheckInner({ activity, onResult }: { activity: Activity; onResult: 
           onClick={() => setSelected(idx)}
         >
           <span className="badge badge-kind">{String.fromCharCode(65 + idx)}</span>
-          <code>{opt}</code>
+          <span><RichText text={opt} /></span>
         </button>
       ))}
       <button type="button" className="btn btn-primary" onClick={submit} disabled={selected === null || busy}>
@@ -156,11 +157,11 @@ function FillBlankInner({ activity, onResult }: { activity: Activity; onResult: 
 
   return (
     <div>
-      <p style={{ marginTop: 0 }}>{activity.spec.prompt}</p>
+      <p className="activity-prompt"><RichText text={activity.spec.prompt || ""} /></p>
       <div className="code-block" style={{ lineHeight: 2.2 }}>
         {parts.map((part, idx) => (
           <React.Fragment key={idx}>
-            <span>{part}</span>
+            <HighlightedLines code={part} lang={activity.tech_slug} />
             {idx < blanks.length && (
               <input
                 aria-label={`Blank ${idx + 1}`}
@@ -209,11 +210,13 @@ function ParsonsInner({ activity, onResult }: { activity: Activity; onResult: (r
 
   return (
     <div>
-      <p style={{ marginTop: 0 }}>{activity.spec.prompt}</p>
+      <p className="activity-prompt"><RichText text={activity.spec.prompt || ""} /></p>
       <div style={{ marginBottom: 12 }}>
         {order.map((lineIdx, pos) => (
           <div key={lineIdx} className="parsons-row">
-            <pre style={{ margin: 0, whiteSpace: "pre" }}>{lines[lineIdx]}</pre>
+            <pre style={{ margin: 0, whiteSpace: "pre" }}>
+              <HighlightedLines code={lines[lineIdx]} lang={activity.tech_slug} />
+            </pre>
             <div style={{ display: "flex", gap: 4 }}>
               <button
                 type="button"
@@ -266,14 +269,14 @@ function CodeTraceInner({ activity, onResult }: { activity: Activity; onResult: 
 
   return (
     <div>
-      <p style={{ marginTop: 0 }}>{activity.spec.prompt}</p>
+      <p className="activity-prompt"><RichText text={activity.spec.prompt || ""} /></p>
       <div className="code-block">
         {codeLines.map((ln, idx) => (
           <div key={idx} className={`trace-line ${activeLine === idx + 1 ? "active" : ""}`}>
             <span className="muted" style={{ width: 22, textAlign: "right" }}>
               {idx + 1}
             </span>
-            <span>{ln}</span>
+            <span><HighlightedLines code={ln} lang={activity.tech_slug} /></span>
           </div>
         ))}
       </div>
@@ -291,7 +294,7 @@ function CodeTraceInner({ activity, onResult }: { activity: Activity; onResult: 
           }}
         >
           <span style={{ fontSize: "0.85rem" }}>
-            <strong>Step {stepIdx + 1}/{steps.length}:</strong> {steps[stepIdx]?.note}
+            <strong>Step {stepIdx + 1}/{steps.length}:</strong> <RichText text={steps[stepIdx]?.note || ""} />
           </span>
           <div style={{ display: "flex", gap: 6 }}>
             <button
@@ -317,7 +320,7 @@ function CodeTraceInner({ activity, onResult }: { activity: Activity; onResult: 
         {checkpoints.map((cp) => (
           <label key={cp.id} style={{ display: "block", fontSize: "0.85rem" }}>
             <div style={{ marginBottom: 4 }}>
-              {cp.label} <span className="muted">(line {cp.line})</span>
+              <RichText text={cp.label} /> <span className="muted">(line {cp.line})</span>
             </div>
             <input
               className="input-field"
@@ -598,7 +601,7 @@ function PdbSimInner({ activity, onResult }: { activity: Activity; onResult: (r:
 
   return (
     <div className="pdb-shell" data-testid={`pdb-sim-${activity.id}`}>
-      <p style={{ margin: 0 }}>{activity.spec.prompt}</p>
+      <p className="activity-prompt"><RichText text={activity.spec.prompt || ""} /></p>
 
       {/* Required Debugging Objectives Checklist */}
       <div className="pdb-objectives" aria-label="Debugging objectives">
@@ -643,7 +646,7 @@ function PdbSimInner({ activity, onResult }: { activity: Activity; onResult: (r:
                   />
                   <span className="pdb-pointer">{isActive ? "->" : ""}</span>
                   <span className="pdb-lineno">{lineNo}</span>
-                  <span className="pdb-code-text">{ln}</span>
+                  <span className="pdb-code-text"><HighlightedLines code={ln} lang="python" /></span>
                 </div>
               );
             })}
@@ -1203,7 +1206,7 @@ function NvimLabInner({ activity, onResult }: { activity: Activity; onResult: (r
 
   return (
     <div>
-      <p style={{ marginTop: 0, whiteSpace: "pre-line" }}>{activity.spec.instructions}</p>
+      <ZySectionBody text={activity.spec.instructions || ""} />
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
         <button
@@ -1257,7 +1260,7 @@ function NvimLabInner({ activity, onResult }: { activity: Activity; onResult: (r
         <div className="feedback-box" style={{ background: "rgba(224,175,104,0.12)", border: "1px solid rgba(224,175,104,0.35)" }}>
           {hints.map((h, i) => (
             <div key={i}>
-              <strong>Hint {i + 1}:</strong> {h}
+              <strong>Hint {i + 1}:</strong> <RichText text={h} />
             </div>
           ))}
         </div>

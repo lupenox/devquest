@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Award, BookOpen, ExternalLink, MessageSquareCode } from "lucide-react";
+import { ArrowLeft, Award, BookOpen, CheckCircle2, Circle, ExternalLink, MessageSquareCode } from "lucide-react";
 import { api } from "../api";
 import type { GradeOutcome, MockInterviewStartResp, ModuleDetail } from "../types";
 import { ActivityCard } from "./ActivityWidgets";
+import { HighlightedCode, RichText, ZySectionBody } from "./RichText";
 import { extractRepoFromModule, MockInterviewPanel } from "./RepoInterviewView";
 import "../labs.css";
 
@@ -13,7 +14,18 @@ interface Props {
   onProgressUpdated: () => void;
 }
 
+function savedConcepts(prefix: string): Set<string> {
+  try {
+    const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+    return new Set(keys.map((key) => key.slice(prefix.length)));
+  } catch {
+    return new Set();
+  }
+}
+
 export function ModuleView({ moduleId, liveOutcome, onBack, onProgressUpdated }: Props) {
+  const storagePrefix = `devquest:concepts:${encodeURIComponent(moduleId)}:`;
+  const [readConcepts, setReadConcepts] = useState(() => savedConcepts(storagePrefix));
   const [mod, setMod] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +33,29 @@ export function ModuleView({ moduleId, liveOutcome, onBack, onProgressUpdated }:
   const [mockStarting, setMockStarting] = useState(false);
   const [mockError, setMockError] = useState<string | null>(null);
   const [repoReadiness, setRepoReadiness] = useState<number | null>(null);
+
+  useEffect(() => {
+    function syncReading(event: StorageEvent) {
+      if (event.key === null || event.key.startsWith(storagePrefix)) {
+        setReadConcepts(savedConcepts(storagePrefix));
+      }
+    }
+    window.addEventListener("storage", syncReading);
+    return () => window.removeEventListener("storage", syncReading);
+  }, [storagePrefix]);
+
+  function toggleConcept(id: string) {
+    const next = new Set(readConcepts);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    try {
+      if (next.has(id)) localStorage.setItem(storagePrefix + id, "1");
+      else localStorage.removeItem(storagePrefix + id);
+    } catch {
+      // Keep progress in memory for this visit when storage is unavailable.
+    }
+    setReadConcepts(next);
+  }
 
   const load = async (silent = false) => {
     if (!silent) {
@@ -91,15 +126,18 @@ export function ModuleView({ moduleId, liveOutcome, onBack, onProgressUpdated }:
   const pct = mod.activities.length ? Math.round((doneCount / mod.activities.length) * 100) : 0;
   const isRepoInterview = mod.kind === "repo_interview";
   const repoFullName = isRepoInterview ? extractRepoFromModule(mod) : "";
+  const sections = mod.content.sections;
+  const conceptIds = sections.map((section, i) => `${i}:${section.title}`);
+  const readCount = conceptIds.filter((id) => readConcepts.has(id)).length;
 
   return (
-    <div>
+    <div className="module-reader">
       <button type="button" className="btn" onClick={onBack} style={{ marginBottom: 14 }}>
         <ArrowLeft size={15} /> Back
       </button>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div className="module-overview">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
               <span className="tech-dot" style={{ background: mod.technology.color }} />
@@ -108,17 +146,22 @@ export function ModuleView({ moduleId, liveOutcome, onBack, onProgressUpdated }:
               <span className="badge badge-unstarted">{mod.difficulty}</span>
               <span className="muted" style={{ fontSize: "0.82rem" }}>~{mod.estimated_minutes} min</span>
             </div>
-            <h2 style={{ margin: "0 0 6px" }}>{mod.title}</h2>
-            <p className="muted" style={{ margin: 0 }}>{mod.subtitle}</p>
+            <h2 className="module-title"><RichText text={mod.title} /></h2>
+            <p className="module-subtitle"><RichText text={mod.subtitle} /></p>
           </div>
-          <div style={{ minWidth: 180 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
-              <span>Module Progress</span>
+          <div className="module-progress">
+            <div className="module-progress-caption">
+              <span>Activities completed</span>
               <strong>{doneCount}/{mod.activities.length} ({pct}%)</strong>
             </div>
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${pct}%`, background: mod.technology.color }} />
             </div>
+            {sections.length > 0 && (
+              <span className="concept-count" aria-live="polite">
+                <BookOpen size={15} aria-hidden="true" /> Concepts read <b>{readCount}/{sections.length}</b>
+              </span>
+            )}
           </div>
         </div>
         {mod.content.external_resources && mod.content.external_resources.length > 0 && (
@@ -193,15 +236,23 @@ export function ModuleView({ moduleId, liveOutcome, onBack, onProgressUpdated }:
       )}
 
       {/* zyBooks Active Reading Sections */}
-      {mod.content.sections.map((sec, idx) => (
-        <section key={idx} className="zy-section">
-          <h3 className="card-title">
-            <BookOpen size={17} color="#7aa2f7" /> {sec.title}
-          </h3>
-          <p style={{ margin: "0 0 8px", lineHeight: 1.65 }}>{sec.body}</p>
-          {sec.code_example && <pre className="code-block">{sec.code_example}</pre>}
-        </section>
-      ))}
+      {sections.map((sec, idx) => {
+        const read = readConcepts.has(conceptIds[idx]);
+        return (
+          <section key={idx} className={`zy-section lesson-concept${read ? " zy-section-read" : ""}`} aria-labelledby={`concept-${idx}`}>
+            <div className="concept-heading">
+              <h3 id={`concept-${idx}`}><RichText text={sec.title} /></h3>
+              <button type="button" className="concept-toggle" aria-pressed={read}
+                aria-describedby={`concept-${idx}`} onClick={() => toggleConcept(conceptIds[idx])}>
+                {read ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                {read ? "Read" : "Mark read"}
+              </button>
+            </div>
+            <ZySectionBody text={sec.body} />
+            {sec.code_example && <HighlightedCode code={sec.code_example} lang={mod.tech_slug} />}
+          </section>
+        );
+      })}
 
       {/* Interactive Participation, Debugger Sims & Neovim Challenge Activities */}
       <h3 style={{ margin: "20px 0 12px" }}>Interactive Participation &amp; Neovim Labs</h3>

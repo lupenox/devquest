@@ -4,7 +4,7 @@
       "id": "py-01-variables-types",
       "tech_slug": "python",
       "title": "Variables, Primitives, Operators & F-Strings",
-      "subtitle": "Master Python's dynamic object bindings, numeric operators, None safety, and formatted strings.",
+      "subtitle": "Tell a missing value from zero, split a duration into hours and minutes, and format a result for display.",
       "difficulty": "beginner",
       "kind": "zybooks",
       "estimated_minutes": 6,
@@ -19,17 +19,17 @@
       "sections": [
         {
           "title": "1.1 Dynamic Typing, Primitives & `is None`",
-          "body": "Python variables are names bound to typed objects (`int`, `float`, `bool`, `str`, `None`). Integers have arbitrary precision, and `None` is a unique singleton representing absence of a value. Always check `value is None` (or `value is not None`) instead of `== None` or `if not value:`, because `0`, `0.0`, and `\"\"` are valid non-`None` values that evaluate to `False`.",
+          "body": "A training run reports a loss of `0.0`. What should you store if it never reports a loss? Use `None` for the missing value.\n\nA variable names an object. Here `epochs` names an integer (`int`), while `loss` can hold a decimal value (`float`) or `None`. Python also has `bool` for true or false and `str` for text. Integers can grow as large as memory allows.\n\nPrefer `value is None` for a missing value because a truth test also matches `0`, `0.0`, and the empty string `\"\"`.\n\nPredict what this code prints. What changes if you set `loss` to `None`?",
           "code_example": "epochs: int = 12\nloss: float | None = 0.0\n\nif loss is not None:\n    print(f\"recorded loss={loss:.2f}\")  # prints 0.00 (even though 0.0 is falsy!)"
         },
         {
           "title": "1.2 Arithmetic Operators: `/` vs `//`, `%`, and `**`",
-          "body": "In Python 3, `/` ALWAYS performs true float division (`7 / 2 == 3.5`). Use `//` for floor integer division (`7 // 2 == 3`), `%` for the remainder (`7 % 2 == 1`), and `**` for exponentiation (`2 ** 3 == 8`). Pairing `//` and `%` cleanly splits seconds into hours/minutes or items into pages.",
+          "body": "A timer reads **3,665 seconds**. How many full hours have passed, and how many seconds are left? Use `//` for the whole hours and `%` for the remainder. Repeat with 60 to get minutes and seconds.\n\nTry the operators on a smaller pair of integers. With `7 / 2` you get `3.5`, with `7 // 2` you get `3`, and with `7 % 2` you get `1`. To raise a number to a power, use `**`, as in `2 ** 3`.",
           "code_example": "total_sec = 3665\nhours = total_sec // 3600       # 1\nrem   = total_sec % 3600        # 65\nmins  = rem // 60               # 1\nsecs  = rem % 60                # 5"
         },
         {
           "title": "1.3 Expressive F-Strings & Format Specifiers",
-          "body": "Prefixing a string with `f` evaluates any Python expression inside `{...}`. Add a colon `:` for precision (`:.2f`), dynamic precision (`:.{n}f`), thousands separators (`:,`), percentages (`:.1%`), or quick debug output (`f\"{loss=}\"`).",
+          "body": "How would you display `0.9146` as `91.5%`? Start the string with `f`, put the value inside braces, and use `:.1%` to show a percentage with one decimal place.\n\nThe part after the colon controls how the value looks. Try `:.2f` for two decimal places, `:,` for grouped thousands, or `:.{n}f` to choose the precision with a variable. To inspect both a name and its value while debugging, try `f\"{loss=}\"`.",
           "code_example": "model = \"qwen-27b\"\nacc = 0.9146\nprint(f\"{model}: acc={acc:.2f} ({acc:.1%})\")  # qwen-27b: acc=0.91 (91.5%)"
         }
       ],

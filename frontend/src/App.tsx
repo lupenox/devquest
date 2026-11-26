@@ -426,6 +426,7 @@ export function App() {
       <main>
         {activeModuleId ? (
           <ModuleView
+            key={activeModuleId}
             moduleId={activeModuleId}
             liveOutcome={liveOutcome}
             onBack={handleBackFromModule}

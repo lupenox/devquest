@@ -384,8 +384,6 @@ export function buildDryRunMarkdown(
   ].join("\n");
 }
 
-export function formatLadderTitle(title: string, idx: number): string {
-  const trimmed = (title || "").trim();
-  if (/^\d+\./.test(trimmed)) return trimmed;
-  return `${idx + 1}. ${trimmed}`;
+export function formatLadderTitle(title: string, _idx?: number): string {
+  return (title || "").trim().replace(/^\d+\.\s*/, "");
 }

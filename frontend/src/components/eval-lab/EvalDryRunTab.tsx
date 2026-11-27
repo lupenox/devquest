@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckCircle2,
@@ -32,6 +32,15 @@ interface EvalDryRunTabProps {
   onRefresh: () => Promise<void>;
 }
 
+function buildChecklistState(run: EvalDryRun | undefined): Record<string, boolean> {
+  if (!run) return {};
+  const nextChecklist: Record<string, boolean> = {};
+  for (const item of HYGIENE_ITEMS) {
+    nextChecklist[item.key] = Boolean(run.checklist?.[item.key]);
+  }
+  return nextChecklist;
+}
+
 export function EvalDryRunTab({
   dryRuns,
   activeDryRunId,
@@ -39,6 +48,7 @@ export function EvalDryRunTab({
   onDryRunsChange,
   onRefresh,
 }: EvalDryRunTabProps) {
+  const initialActive = dryRuns.find((r) => r.id === activeDryRunId) || dryRuns[0];
   const [showCreateForm, setShowCreateForm] = useState<boolean>(dryRuns.length === 0);
 
   // Create form fields
@@ -53,30 +63,43 @@ export function EvalDryRunTab({
   const [creatingDryRun, setCreatingDryRun] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Active dry-run draft
-  const [draftWhatHelped, setDraftWhatHelped] = useState("");
-  const [draftWhereSteppedIn, setDraftWhereSteppedIn] = useState("");
-  const [draftPreferredNotes, setDraftPreferredNotes] = useState("");
-  const [draftChecklist, setDraftChecklist] = useState<Record<string, boolean>>({});
+  // Active dry-run draft (lazily initialized from the active plan to prevent stale-zero mount flash)
+  const [draftWhatHelped, setDraftWhatHelped] = useState(() => initialActive?.what_helped || "");
+  const [draftWhereSteppedIn, setDraftWhereSteppedIn] = useState(
+    () => initialActive?.where_stepped_in || ""
+  );
+  const [draftPreferredNotes, setDraftPreferredNotes] = useState(
+    () => initialActive?.preferred_approach_notes || ""
+  );
+  const [draftChecklist, setDraftChecklist] = useState<Record<string, boolean>>(() =>
+    buildChecklistState(initialActive)
+  );
   const [savingDryRun, setSavingDryRun] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
   const [copiedWriteup, setCopiedWriteup] = useState(false);
   const [copiedVerifyCmd, setCopiedVerifyCmd] = useState(false);
   const [showWriteupPreview, setShowWriteupPreview] = useState(false);
+  const syncedRunIdRef = useRef<string | undefined>(initialActive?.id);
 
   const activeDryRun: EvalDryRun | undefined = useMemo(
     () => dryRuns.find((r) => r.id === activeDryRunId) || dryRuns[0],
     [dryRuns, activeDryRunId]
   );
 
+  const prevDryRunsLenRef = useRef<number>(dryRuns.length);
+
   useEffect(() => {
     if (dryRuns.length === 0) {
       setShowCreateForm(true);
+    } else if (prevDryRunsLenRef.current === 0) {
+      setShowCreateForm(false);
     }
+    prevDryRunsLenRef.current = dryRuns.length;
   }, [dryRuns.length]);
 
   const syncDryRunDraft = useCallback((run: EvalDryRun | undefined) => {
+    syncedRunIdRef.current = run?.id;
     if (!run) {
       setDraftWhatHelped("");
       setDraftWhereSteppedIn("");
@@ -87,19 +110,16 @@ export function EvalDryRunTab({
     setDraftWhatHelped(run.what_helped || "");
     setDraftWhereSteppedIn(run.where_stepped_in || "");
     setDraftPreferredNotes(run.preferred_approach_notes || "");
-    const nextChecklist: Record<string, boolean> = {};
-    for (const item of HYGIENE_ITEMS) {
-      nextChecklist[item.key] = Boolean(run.checklist?.[item.key]);
-    }
-    setDraftChecklist(nextChecklist);
+    setDraftChecklist(buildChecklistState(run));
   }, []);
 
   useEffect(() => {
+    if (syncedRunIdRef.current === activeDryRun?.id) return;
     syncDryRunDraft(activeDryRun);
     setSaveMessage(null);
     setDryRunError(null);
     setShowWriteupPreview(false);
-  }, [activeDryRun?.id, syncDryRunDraft]);
+  }, [activeDryRun, syncDryRunDraft]);
 
   const handleCreateDryRun = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -603,7 +623,9 @@ export function EvalDryRunTab({
                       />
                       <span className="eval-hygiene-text">
                         <strong>{item.label}</strong>
-                        <small>{item.hint}</small>
+                        <small>
+                          <RichText text={item.hint} />
+                        </small>
                       </span>
                     </label>
                   );

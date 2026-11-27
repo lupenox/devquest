@@ -17,10 +17,13 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   // 2. Verify Frutiger Aero theme, 7-Axis Behavioral Cheat Sheet & Honesty vs Confidence callout
   await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
   await expect(page.getByTestId("eval-lab-hero")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".lab-window canvas")).toBeVisible();
   await expect(page.getByTestId("eval-confidence-pct")).toContainText("0%");
+  await page.getByText("Progress", {exact: true}).click();
   await expect(page.getByTestId("eval-confidence-ladder")).toBeVisible();
   await expect(page.getByTestId("eval-playbook")).toBeVisible();
 
+  await page.getByText("Open reference", {exact:true}).click();
   const cheatsheet = page.getByTestId("eval-7axis-cheatsheet");
   await expect(cheatsheet).toBeVisible();
   for (const axisLabel of ["Honesty", "Agentic Safety", "Scoping", "Deference", "Interaction", "Confidence", "Clarity"]) {
@@ -44,6 +47,7 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   const activeScenario = page.getByTestId("eval-scenario-active");
   await expect(activeScenario).toBeVisible();
 
+  await page.getByRole("button", {name:"Compare responses"}).click();
   // Verify Quick Practice default keeps deep 7-axis matrix & structured write-ups tucked away until toggled
   await expect(page.getByTestId("eval-mode-quick")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("eval-7axis-matrix")).toHaveCount(0);
@@ -76,6 +80,7 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
     });
   }
 
+  await page.getByRole("button", {name:"Give verdict"}).click();
   // Pick Approach B + tag reward hacking
   await page.getByTestId("eval-choice-strongly_b").click();
   const weakenedTag = page.getByTestId("eval-tag-weakened_test");
@@ -141,6 +146,7 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   // Verify Calibration Result + 7-Axis Calibration Table + Write-Up Checks + 4-Axis Rubric + Confidence % rise
   const calResult = page.getByTestId("eval-calibration-result");
   await expect(calResult).toBeVisible({ timeout: 10000 });
+  await page.getByText("Detailed scoring and coaching").click();
   await expect(page.getByTestId("eval-axis-calibration-table")).toBeVisible();
   await expect(page.getByTestId("eval-writeup-checks")).toBeVisible();
   await expect(page.getByTestId("eval-rubric-bars")).toContainText("Stance Clarity");
@@ -155,6 +161,7 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   await page.locator("#dryrun-license").selectOption("MIT");
   await page.locator("#dryrun-task-type").selectOption("Bug Fix");
   await page.locator("#dryrun-goal").fill("Fix monotonic clock TTL expiration boundary without relaxing tests.");
+  await page.getByRole("button", {name:"Define acceptance checks"}).click();
   await page.locator("#dryrun-ac-1").fill("Expired entries return None strictly at >= ttl_seconds.");
   await page.locator("#dryrun-ac-2").fill("Existing unit tests pass unchanged with zero skipped assertions.");
   await page.locator("#dryrun-ac-3").fill("Add regression test covering clock boundary behavior.");
@@ -179,4 +186,26 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   // 5. Verify zero horizontal overflow at 320px viewport width
   await page.setViewportSize({ width: 320, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
+
+test("phone walkthrough supports reduced motion and unavailable WebGL", async ({ page }) => {
+  await page.setViewportSize({width: 375, height: 812});
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.addInitScript(() => { Object.defineProperty(window, "WebGL2RenderingContext", {value: undefined}); });
+  await page.goto("/eval-lab");
+  await expect(page.getByRole("button", {name: "Motion off"})).toBeDisabled();
+  await expect(page.locator(".lab-window canvas")).toBeHidden();
+  await page.getByTestId("eval-tab-practice").click();
+  await page.getByRole("button", {name: "Compare responses"}).click();
+  await expect(page.getByTestId("eval-transcript-a")).toBeVisible();
+  await page.getByRole("button", {name: "Model B", exact:true}).click();
+  await expect(page.getByTestId("eval-transcript-a")).toBeHidden();
+  await page.getByTestId("eval-transcript-b").getByRole("button").first().click();
+  await page.getByRole("button", {name: "Give verdict"}).click();
+  await expect(page.locator("#eval-rationale")).toHaveValue(/\[B\d+\]/);
+  await page.getByTestId("eval-choice-strongly_b").click();
+  await page.getByTestId("eval-submit-btn").click();
+  await expect(page.getByTestId("eval-calibration-result")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });

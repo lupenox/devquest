@@ -27,6 +27,7 @@ import {
 } from "./evalLabConstants";
 
 interface EvalDryRunTabProps {
+  onStep: (step: number) => void;
   dryRuns: EvalDryRun[];
   activeDryRunId: string;
   onSelectDryRunId: (id: string) => void;
@@ -51,6 +52,7 @@ function runHasNotes(run: EvalDryRun | undefined): boolean {
 }
 
 export function EvalDryRunTab({
+  onStep,
   dryRuns,
   activeDryRunId,
   onSelectDryRunId,
@@ -58,6 +60,9 @@ export function EvalDryRunTab({
   onRefresh,
 }: EvalDryRunTabProps) {
   const initialActive = dryRuns.find((r) => r.id === activeDryRunId) || dryRuns[0];
+  const [checksStep, setChecksStep] = useState(false);
+  const [reviewStep, setReviewStep] = useState(false);
+  useEffect(() => { setReviewStep(false); }, [activeDryRunId]);
   const [showCreateForm, setShowCreateForm] = useState<boolean>(dryRuns.length === 0);
 
   // Create form fields
@@ -176,6 +181,11 @@ export function EvalDryRunTab({
       setCreateError("Add both a Repo / Project Name and a concise Task Goal to create your plan.");
       return;
     }
+    if (!checksStep) {
+      setCreateError(null);
+      setChecksStep(true);
+      return;
+    }
     setCreatingDryRun(true);
     setCreateError(null);
     const criteria = [newAc1, newAc2, newAc3].map((c) => c.trim()).filter(Boolean);
@@ -204,6 +214,7 @@ export function EvalDryRunTab({
       setNewAc3("");
       setNewVerifyCmd("");
       setShowCreateForm(false);
+      setChecksStep(false);
       onDryRunsChange((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       onSelectDryRunId(created.id);
       syncDryRunDraft(created);
@@ -371,12 +382,15 @@ export function EvalDryRunTab({
 
   const isCreating = showCreateForm || dryRuns.length === 0;
 
+  const step = isCreating ? (checksStep ? 1 : 0) : (reviewStep ? 3 : 2);
+  useEffect(() => onStep(step), [onStep, step]);
   return (
     <section className="eval-section-stack" data-testid="eval-dryrun-workbench">
       {/* Compact Header Bar */}
       <div className="card eval-dryrun-topbar">
         <div>
-          <h3 className="eval-section-title">Prep My Repo (Dry-Run Workbench)</h3>
+          <small>Prep My Repo · {step + 1} of 4</small>
+          <h3 className="eval-section-title">{["Scope the task", "Define acceptance checks", "Work through the checklist", "Review your write-up"][step]}</h3>
           <p className="eval-section-desc">
             Scope a real OSS task, pass all 6 pre-flight safety checks, and keep your session notes
             organized before starting live.
@@ -440,7 +454,7 @@ export function EvalDryRunTab({
           data-testid="eval-dryrun-form"
           onSubmit={handleCreateDryRun}
         >
-          <div className="eval-dryrun-form-head row">
+          <div hidden={checksStep} className="eval-dryrun-form-head row">
             <div>
               <h4>Scope a New Repo Task</h4>
               <p className="muted">
@@ -459,7 +473,7 @@ export function EvalDryRunTab({
             </button>
           </div>
 
-          <div className="eval-dryrun-form-group">
+          <div hidden={checksStep} className="eval-dryrun-form-group">
             <span className="eval-group-kicker">1. Repo &amp; Goal</span>
             <div className="eval-form-grid">
               <div className="eval-field-group">
@@ -520,7 +534,7 @@ export function EvalDryRunTab({
             </div>
           </div>
 
-          <div className="eval-dryrun-form-group">
+          <div hidden={!checksStep} className="eval-dryrun-form-group">
             <span className="eval-group-kicker">2. How You&apos;ll Verify It (Optional)</span>
             <div className="eval-field-group">
               <label htmlFor="dryrun-verify-cmd">Verification Command</label>
@@ -594,8 +608,9 @@ export function EvalDryRunTab({
               disabled={creatingDryRun}
             >
               <Plus size={15} aria-hidden="true" />
-              <span>{creatingDryRun ? "Creating Plan…" : "Create Dry-Run Plan"}</span>
+              <span>{!checksStep ? "Define acceptance checks" : creatingDryRun ? "Creating Plan…" : "Create Dry-Run Plan"}</span>
             </button>
+            {checksStep && <button type="button" className="btn" onClick={() => setChecksStep(false)}>Back</button>}
             {dryRuns.length > 0 && (
               <button type="button" className="btn" onClick={() => setShowCreateForm(false)}>
                 Cancel
@@ -666,7 +681,7 @@ export function EvalDryRunTab({
               </div>
             )}
 
-            <div className="eval-dryrun-meta-grid">
+            <div hidden={reviewStep} className="eval-dryrun-meta-grid">
               <div className="eval-brief-box">
                 <h4>
                   <ListChecks size={14} aria-hidden="true" /> Acceptance Criteria
@@ -714,7 +729,7 @@ export function EvalDryRunTab({
             </div>
 
             {/* Step 2 · 6-Point Pre-Flight Safety Checklist */}
-            <div className="eval-hygiene-section" data-testid="eval-hygiene-checklist">
+            <div hidden={reviewStep} className="eval-hygiene-section" data-testid="eval-hygiene-checklist">
               <div className="eval-hygiene-head">
                 <div className="eval-form-step-head">
                   <span className="eval-step-badge">2</span>
@@ -767,10 +782,14 @@ export function EvalDryRunTab({
               </div>
             </div>
 
+            <button className="btn" onClick={() => {
+              setReviewStep(!reviewStep);
+              if (!reviewStep) { setNotesOpen(true); setShowWriteupPreview(true); }
+            }}>{reviewStep ? "Back to checklist" : "Review write-up"}</button>
             {/* Step 3 · Session Notes & Markdown Export (Tidy Collapsible Drawer) */}
             <details
               className="eval-examples-details"
-              data-testid="eval-dryrun-notes-drawer"
+              hidden={!reviewStep} data-testid="eval-dryrun-notes-drawer"
               open={notesOpen}
             >
               <summary

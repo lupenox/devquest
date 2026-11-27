@@ -53,7 +53,6 @@ import {
   formatDifficulty,
   formatLangLabel,
   formatRoleLabel,
-  formatShortScenarioTitle,
   hasTranscriptQuote,
   humanizeSlug,
   normalizeHighlightLang,
@@ -101,10 +100,9 @@ function createEmptyScenarioDraft(
 }
 
 interface EvalPracticeTabProps {
+  onStep: (step: number) => void;
   scenarios: EvalScenario[];
   behavioralAxes: BehavioralAxisDef[];
-  completedCount: number;
-  totalScenarios: number;
   activeScenarioId: string;
   practiceMode?: PracticeMode;
   onChangePracticeMode?: (mode: PracticeMode) => void;
@@ -116,15 +114,19 @@ interface EvalPracticeTabProps {
 export function EvalPracticeTab({
   scenarios,
   behavioralAxes,
-  completedCount,
-  totalScenarios,
-  activeScenarioId,
+  activeScenarioId, onStep,
   practiceMode: controlledMode,
   onChangePracticeMode,
   onSelectScenarioId,
   onCalibrated,
   onOpenDryRun,
 }: EvalPracticeTabProps) {
+  const [steps, setSteps] = useState<Record<string, number>>({});
+  const step = steps[activeScenarioId] ?? 0;
+  const [side, setSide] = useState("a");
+  const [openEvidenceId, setOpenEvidenceId] = useState("");
+  const go = (next: number) => setSteps(prev => ({...prev, [activeScenarioId]: next}));
+  useEffect(() => onStep(step), [onStep, step]);
   const [localPracticeMode, setLocalPracticeMode] = useState<PracticeMode>("quick");
   const practiceMode = controlledMode ?? localPracticeMode;
   const setPracticeMode = (next: PracticeMode) => {
@@ -144,7 +146,7 @@ export function EvalPracticeTab({
 
   const [submittingByScenario, setSubmittingByScenario] = useState<Record<string, boolean>>({});
   const [submitErrorByScenario, setSubmitErrorByScenario] = useState<Record<string, string>>({});
-  const [resultsByScenario, setResultsByScenario] = useState<Record<string, EvalSubmitResp>>({});
+  const [resultsByScenario, setResultsByScenario] = useState<Record<string, EvalSubmitResp & { submittedChoice: EvalChoice }>>({});
   const [submittedModeByScenario, setSubmittedModeByScenario] = useState<
     Record<string, PracticeMode>
   >({});
@@ -282,7 +284,6 @@ export function EvalPracticeTab({
   const activeScenarioIdx = activeScenario
     ? scenarios.findIndex((s) => s.id === activeScenario.id)
     : -1;
-  const prevScenario = activeScenarioIdx > 0 ? scenarios[activeScenarioIdx - 1] : null;
   const nextScenario =
     activeScenarioIdx >= 0 && activeScenarioIdx + 1 < scenarios.length
       ? scenarios[activeScenarioIdx + 1]
@@ -538,16 +539,10 @@ export function EvalPracticeTab({
           : {}),
         ...(isFullSubmit && otherIssues.trim() ? { other_issues: otherIssues.trim() } : {}),
       });
-      setResultsByScenario((prev) => ({ ...prev, [submittedScenarioId]: resp }));
+      setResultsByScenario((prev) => ({ ...prev, [submittedScenarioId]: { ...resp, submittedChoice: choice } }));
       setSubmittedModeByScenario((prev) => ({ ...prev, [submittedScenarioId]: practiceMode }));
       onCalibrated(resp.overview);
-      if (activeIdRef.current === submittedScenarioId) {
-        window.setTimeout(() => {
-          if (activeIdRef.current === submittedScenarioId) {
-            calibrationRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          }
-        }, 60);
-      }
+      setSteps(prev => ({...prev, [submittedScenarioId]: 3}));
     } catch (err: any) {
       setScenarioSubmitError(
         submittedScenarioId,
@@ -575,79 +570,23 @@ export function EvalPracticeTab({
 
   return (
     <section className="eval-section-stack">
-      {/* 1. Sleek 1-Row Scenario Switcher Rail */}
-      <div className="card eval-rail-card">
-        <div className="eval-rail-top">
-          <div className="eval-rail-meta">
-            <span className="eval-rail-counter">
-              Scenario {activeScenarioIdx >= 0 ? activeScenarioIdx + 1 : 1} of{" "}
-              {scenarios.length || totalScenarios}
-            </span>
-            <span className="eval-rail-sep" aria-hidden="true">
-              ·
-            </span>
-            <span className="eval-rail-done">
-              {completedCount}/{totalScenarios} calibrated
-            </span>
-          </div>
-          <div className="eval-rail-nav">
-            <button
-              type="button"
-              className="btn btn-sm eval-rail-step-btn"
-              disabled={!prevScenario}
-              onClick={() => prevScenario && onSelectScenarioId(prevScenario.id)}
-              aria-label="Previous scenario"
-            >
-              <ChevronLeft size={14} aria-hidden="true" />
-              <span>Prev</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm eval-rail-step-btn"
-              disabled={!nextScenario}
-              onClick={() => nextScenario && onSelectScenarioId(nextScenario.id)}
-              aria-label="Next scenario"
-            >
-              <span>Next</span>
-              <ChevronRight size={14} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        <div className="eval-scenario-rail" data-testid="eval-scenarios-list">
-          {scenarios.map((sc, idx) => {
-            const isActive = activeScenario?.id === sc.id;
-            return (
-              <button
-                key={sc.id}
-                type="button"
-                className={`eval-rail-pill ${isActive ? "active" : ""} ${
-                  sc.completed ? "completed" : ""
-                }`}
-                data-testid={`eval-scenario-pill-${sc.id}`}
-                aria-pressed={isActive}
-                title={`${idx + 1}. ${sc.title} (${formatLangLabel(sc.language)}, ~${sc.estimated_minutes}m)`}
-                onClick={() => onSelectScenarioId(sc.id)}
-              >
-                <span className="eval-rail-num">{idx + 1}</span>
-                <span className="eval-rail-label">{formatShortScenarioTitle(sc.id, sc.title)}</span>
-                {sc.completed && (
-                  <CheckCircle2
-                    size={13}
-                    className="eval-pill-done-icon"
-                    aria-label="Calibrated"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {activeScenario && (
         <div className="eval-section-stack" data-testid="eval-scenario-active">
+          <div className="lab-chapter" aria-live="polite">
+            <small>Practice · {step + 1} of 4</small>
+            <h3>{["Scenario brief", "Compare responses", "Give your verdict", "Review feedback"][step]}</h3>
+            <div className="lab-actions">
+              {step > 0 && <button className="btn" onClick={() => go(step - 1)}>Back</button>}
+              {step < 2 && <button className="btn btn-primary" onClick={() => go(step + 1)}>{step ? "Give verdict" : "Compare responses"}</button>}
+              {step === 2 && activeResult && <button className="btn" onClick={() => go(3)}>View last feedback</button>}
+              {step === 2 && <button className="btn" aria-expanded={openEvidenceId === activeScenarioId}
+                onClick={() => setOpenEvidenceId(openEvidenceId === activeScenarioId ? "" : activeScenarioId)}>
+                {openEvidenceId === activeScenarioId ? "Close evidence" : "Reopen evidence"}
+              </button>}
+            </div>
+          </div>
           {/* 2. Clean Mission Brief */}
-          <div className="card eval-brief-card compact">
+          <div hidden={step !== 0} className="card eval-brief-card compact">
             <div className="eval-brief-top">
               <div className="eval-brief-heading-wrap">
                 <h3 className="eval-scenario-heading">{activeScenario.title}</h3>
@@ -706,7 +645,11 @@ export function EvalPracticeTab({
           </div>
 
           {/* 3. Unified Evidence Toolbar + Side-by-Side Model A vs Model B */}
-          <div className="eval-evidence-block">
+          <div hidden={step !== 1 && !(step === 2 && openEvidenceId === activeScenarioId)} className="eval-evidence-block" data-model={side}>
+            <div className="lab-model-switch" role="group" aria-label="Visible model">
+              {["a", "b"].map(model => <button className="btn" key={model} aria-pressed={side === model}
+                onClick={() => setSide(model)}>Model {model.toUpperCase()}</button>)}
+            </div>
             <div className="eval-evidence-toolbar">
               {hasTranscripts && (
                 <div
@@ -911,7 +854,7 @@ export function EvalPracticeTab({
           </div>
 
           {/* 4. Calm Guided Evaluation Form (Quick Review default + Progressive 7-Axis Rubric) */}
-          <form className="card eval-review-form" onSubmit={handleSubmitScenario}>
+          <form hidden={step !== 2} className="card eval-review-form" onSubmit={handleSubmitScenario}>
             <div className="eval-form-mode-bar">
               <div>
                 <h4 className="eval-form-main-title">Your Evaluation</h4>
@@ -1454,7 +1397,7 @@ export function EvalPracticeTab({
                 <span>
                   {submittingScenario
                     ? "Calibrating Review…"
-                    : "Submit & Compare with Senior Key"}
+                    : "Submit for calibration"}
                 </span>
               </button>
 
@@ -1477,7 +1420,7 @@ export function EvalPracticeTab({
           </form>
 
           {/* 5. Layered Calibration Result Card */}
-          {activeResult && (
+          {step === 3 && activeResult && (
             <section
               ref={calibrationRef}
               className={`card eval-calibration-card ${
@@ -1503,7 +1446,7 @@ export function EvalPracticeTab({
                     )}
                   </span>
                   <span className="eval-expected-note">
-                    Senior Key: <strong>Model {activeResult.expected_side.toUpperCase()}</strong>
+                    Your verdict: <strong>{CHOICE_OPTIONS.find(option => option.value === activeResult.submittedChoice)?.label}</strong> · Senior key: <strong>Model {activeResult.expected_side.toUpperCase()}</strong>
                   </span>
                 </div>
 
@@ -1556,7 +1499,7 @@ export function EvalPracticeTab({
                 </p>
               </div>
 
-              {/* Matched vs Missed Tags */}
+              <details className="lab-reference"><summary>Detailed scoring and coaching</summary>
               <div className="eval-tag-calibration">
                 <div className="eval-tag-cal-col">
                   <h5>Matched Signals ({activeResult.matched_tags.length})</h5>
@@ -1818,6 +1761,7 @@ export function EvalPracticeTab({
                   </div>
                 </details>
               )}
+              </details>
             </section>
           )}
         </div>

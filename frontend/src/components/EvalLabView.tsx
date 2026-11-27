@@ -15,6 +15,7 @@ import {
   DEFAULT_BEHAVIORAL_AXES,
   DEFAULT_LADDER,
   formatLadderTitle,
+  formatShortScenarioTitle,
   type EvalSubTab,
   type PracticeMode,
 } from "./eval-lab/evalLabConstants";
@@ -22,11 +23,17 @@ import { EvalPlaybookTab } from "./eval-lab/EvalPlaybookTab";
 import { EvalPracticeTab } from "./eval-lab/EvalPracticeTab";
 import "../eval-lab.css";
 
+import { LabWindow } from "./eval-lab/LabWindow";
+
 interface EvalLabViewProps {
+  allowMotion?: boolean;
   onUpdated: () => void;
 }
 
-export function EvalLabView({ onUpdated }: EvalLabViewProps) {
+export function EvalLabView({ onUpdated, allowMotion = true }: EvalLabViewProps) {
+  const [introStep, setIntroStep] = useState(0);
+  const [practiceStep, setPracticeStep] = useState(0);
+  const [repoStep, setRepoStep] = useState(0);
   const [overview, setOverview] = useState<EvalLabOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -153,52 +160,9 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
     <div className="eval-lab-shell">
       {/* Calm Orientation Header, Primary 3-Tab Switcher & Quiet Milestone Trail */}
       <section className="card eval-hero compact" data-testid="eval-lab-hero">
-        <div className="eval-hero-top">
-          <div className="eval-hero-copy">
-            <div className="eval-title-row">
-              <span className="eval-eyebrow">
-                <Scale size={14} aria-hidden="true" />
-                Zero-Stakes Eval Sandbox
-              </span>
-              <h2>AI Code Eval Lab</h2>
-            </div>
-            <p className="eval-subtitle">
-              Compare Model A vs B transcripts, calibrate against a senior key, and prep your repo
-              before going live.
-            </p>
-          </div>
+        <LabWindow station={activeTab} allowMotion={allowMotion}
+          step={activeTab === "playbook" ? introStep : activeTab === "practice" ? practiceStep : repoStep} />
 
-          <div className="eval-confidence-box compact">
-            <div className="eval-confidence-row">
-              <span className="eval-confidence-label">Readiness</span>
-              <strong className="eval-confidence-value" data-testid="eval-confidence-pct">
-                {confidencePct}%
-              </strong>
-            </div>
-            <div
-              className="progress-track eval-confidence-track"
-              role="progressbar"
-              aria-label="Eval Confidence percentage"
-              aria-valuenow={confidencePct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="progress-fill eval-confidence-fill"
-                style={{ width: `${confidencePct}%` }}
-              />
-            </div>
-            <div className="eval-confidence-meta">
-              <span>
-                {completedCount}/{totalScenarios} calibrated
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                {dryRuns.length} {dryRuns.length === 1 ? "repo plan" : "repo plans"}
-              </span>
-            </div>
-          </div>
-        </div>
 
         {/* Single Clear 3-Section Navigation Bar */}
         <div className="eval-subtabs" role="tablist" aria-label="AI Code Eval Lab sections">
@@ -263,6 +227,46 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
         </div>
 
         {/* Quiet Inline Milestone Progress Trail (Progress Feedback, Not Competing Tabs) */}
+        <details className="lab-progress"><summary>Progress</summary>
+          <div className="eval-confidence-box compact">
+            <div className="eval-confidence-row">
+              <span className="eval-confidence-label">Readiness</span>
+              <strong className="eval-confidence-value" data-testid="eval-confidence-pct">
+                {confidencePct}%
+              </strong>
+            </div>
+            <div
+              className="progress-track eval-confidence-track"
+              role="progressbar"
+              aria-label="Eval Confidence percentage"
+              aria-valuenow={confidencePct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="progress-fill eval-confidence-fill"
+                style={{ width: `${confidencePct}%` }}
+              />
+            </div>
+            <div className="eval-confidence-meta">
+              <span>
+                {completedCount}/{totalScenarios} calibrated
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {dryRuns.length} {dryRuns.length === 1 ? "repo plan" : "repo plans"}
+              </span>
+            </div>
+          </div>
+          <div className="eval-scenario-rail" data-testid="eval-scenarios-list">
+            {scenarios.map((sc, index) => <button type="button" key={sc.id} className="btn"
+              data-testid={`eval-scenario-pill-${sc.id}`} aria-pressed={sc.id === activeScenarioId}
+              onClick={event => {
+                setActiveScenarioId(sc.id); selectTab("practice");
+                event.currentTarget.closest("details")!.open = false;
+                tabButtonRefs.current.practice?.focus();
+              }}>Scenario {index + 1} · {formatShortScenarioTitle(sc.id, sc.title)}</button>)}
+          </div>
         <ol
           className="eval-milestone-trail"
           data-testid="eval-confidence-ladder"
@@ -295,6 +299,7 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
             );
           })}
         </ol>
+        </details>
       </section>
 
       {loadError && (
@@ -325,7 +330,7 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
           className="eval-tabpanel"
           hidden={activeTab !== "playbook"}
         >
-          <EvalPlaybookTab
+          <EvalPlaybookTab step={introStep} onStep={setIntroStep} example={scenarios[0]?.transcript_a?.[0]}
             behavioralAxes={behavioralAxes}
             completedCount={completedCount}
             totalScenarios={totalScenarios}
@@ -345,11 +350,9 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
           className="eval-tabpanel"
           hidden={activeTab !== "practice"}
         >
-          <EvalPracticeTab
+          <EvalPracticeTab onStep={setPracticeStep}
             scenarios={scenarios}
             behavioralAxes={behavioralAxes}
-            completedCount={completedCount}
-            totalScenarios={totalScenarios}
             activeScenarioId={activeScenarioId}
             practiceMode={practiceMode}
             onChangePracticeMode={setPracticeMode}
@@ -368,7 +371,7 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
           className="eval-tabpanel"
           hidden={activeTab !== "dryrun"}
         >
-          <EvalDryRunTab
+          <EvalDryRunTab onStep={setRepoStep}
             dryRuns={dryRuns}
             activeDryRunId={activeDryRunId}
             onSelectDryRunId={setActiveDryRunId}

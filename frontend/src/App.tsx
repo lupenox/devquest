@@ -359,6 +359,13 @@ export function App() {
 
   const activeTab = route.tab;
   const activeModuleId = route.moduleId;
+  const immersiveTree = activeTab === "tree" && !activeModuleId;
+  const lastNonTreeTabRef = useRef<typeof route.tab>("dashboard");
+  useEffect(() => {
+    if (activeTab !== "tree") {
+      lastNonTreeTabRef.current = activeTab;
+    }
+  }, [activeTab]);
   const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
   const motionInfo = MOTION_META[motionMode];
   const viewStageKey = activeModuleId ? `mod:${activeModuleId}` : `${activeTab}:${route.techSlug || ""}`;
@@ -372,8 +379,9 @@ export function App() {
 
   return (
     <>
-      <AmbientBackdrop theme={theme} motionMode={motionMode} celebrationTick={celebrationTick} />
-      <div className="app-shell dashboard-shell">
+      {activeTab !== "eval-lab" && activeTab !== "tree" && <AmbientBackdrop theme={theme} motionMode={motionMode} celebrationTick={celebrationTick} />}
+      <div className={`app-shell dashboard-shell${immersiveTree ? " tree-workspace" : ""}`}>
+      {!immersiveTree && (
       <header className="hud-header">
         <a
           className="brand-row brand-home"
@@ -441,7 +449,9 @@ export function App() {
           </label>
         </div>
       </header>
+      )}
 
+      {!immersiveTree && (
       <nav className="nav-tabs" aria-label="Main navigation">
         {NAV_ITEMS.map(({ tab, label, compact, Icon }) => {
           const active = activeTab === tab && !activeModuleId;
@@ -476,6 +486,7 @@ export function App() {
           </div>
         )}
       </nav>
+      )}
 
       {error && (
         <div className="feedback-box err" style={{ marginBottom: 16 }}>
@@ -523,9 +534,13 @@ export function App() {
         ) : activeTab === "repos" ? (
           <RepoInterviewView onOpenModule={openModule} onUpdated={loadDashboard} />
         ) : activeTab === "eval-lab" ? (
-          <EvalLabView onUpdated={loadDashboard} />
+          <EvalLabView allowMotion={motionMode === "full"} onUpdated={loadDashboard} />
         ) : activeTab === "tree" ? (
-          <SkillTreeView onOpenModule={openModule} />
+          <SkillTreeView
+            motionMode={motionMode}
+            onOpenModule={openModule}
+            onBack={() => openTab(lastNonTreeTabRef.current || "dashboard")}
+          />
         ) : activeTab === "projects" ? (
           <BossProjectsView onOpenModule={openModule} />
         ) : (

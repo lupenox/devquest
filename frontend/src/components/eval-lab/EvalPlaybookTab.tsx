@@ -19,6 +19,9 @@ import {
 } from "./evalLabConstants";
 
 interface EvalPlaybookTabProps {
+  step: number;
+  onStep: (step: number) => void;
+  example?: { line: string; text: string };
   behavioralAxes: BehavioralAxisDef[];
   completedCount?: number;
   totalScenarios?: number;
@@ -29,7 +32,7 @@ interface EvalPlaybookTabProps {
 }
 
 export function EvalPlaybookTab({
-  behavioralAxes,
+  step, onStep, example, behavioralAxes,
   completedCount = 0,
   totalScenarios = 6,
   nextScenarioNumber = 1,
@@ -46,48 +49,22 @@ export function EvalPlaybookTab({
 
   return (
     <section className="eval-section-stack" data-testid="eval-playbook">
-      {/* 1. Calm Start Card — 1 Primary Action + Airy 3-Step Flow */}
-      <div className="card eval-flow-card">
-        <div className="eval-section-header">
-          <div>
-            <h3 className="eval-section-title">Start in 3 Calm Steps</h3>
-            <p className="eval-section-desc">
-              Think of AI code eval like structured PR review: read Model A vs B transcripts, pick
-              the more trustworthy agent, and check your call against a senior key.
-            </p>
-          </div>
-          <div className="eval-flow-actions">
-            <button
-              type="button"
-              className="btn btn-primary eval-cta-btn"
-              data-testid="eval-start-scenario-1-btn"
-              onClick={onStartScenarioOne}
-            >
-              <span>{ctaLabel}</span>
-              <ArrowRight size={15} aria-hidden="true" />
-            </button>
-            <button type="button" className="btn btn-ghost eval-quiet-action" onClick={onOpenDryRun}>
-              <Wrench size={14} aria-hidden="true" />
-              <span>Prep My Repo</span>
-            </button>
-          </div>
+      <div className="card lab-lesson">
+        <small>How It Works · {step + 1} of 3</small>
+        <h3>{["Compare two model responses", "Cite what you observed", "Check your judgment"][step]}</h3>
+        <p>{["Two models received the same programming task. Decide which one met the requirements and find a line that supports your call.",
+          "In Practice, select a transcript line to quote it in your evaluation. Explain what that line shows.",
+          "After you submit, compare your verdict with the senior reviewer’s reasoning. Open the scoring details to see which signals you picked up or missed."][step]}</p>
+        {step === 1 && example && <blockquote>[{example.line}] {example.text}</blockquote>}
+        <div className="lab-actions">
+          <button type="button" className="btn btn-primary" data-testid="eval-start-scenario-1-btn" onClick={onStartScenarioOne}>
+            {completedCount ? ctaLabel : "Try the first scenario"} <ArrowRight size={15}/>
+          </button>
+          {step > 0 && <button className="btn" onClick={() => onStep(step - 1)}>Back</button>}
+          {step < 2 && <button className="btn" onClick={() => onStep(step + 1)}>{step ? "See how calibration works" : "See an evidence example"}</button>}
         </div>
-
-        <ol className="eval-flow-strip">
-          {HOW_IT_WORKS_FLOW.map((item) => (
-            <li key={item.step} className="eval-flow-beat">
-              <span className="eval-flow-num" aria-hidden="true">
-                {item.step}
-              </span>
-              <div className="eval-flow-copy">
-                <strong>{item.title}</strong>
-                <p>{item.detail}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
       </div>
-
+      <details className="lab-reference"><summary>Open reference</summary>
       {/* 2. Clean 7-Axis Scannable List + 3 Rules Footer */}
       <div className="card eval-cheatsheet-card" data-testid="eval-7axis-cheatsheet">
         <div className="eval-section-header">
@@ -205,6 +182,7 @@ export function EvalPlaybookTab({
           </div>
         </details>
       </div>
+      </details>
     </section>
   );
 }

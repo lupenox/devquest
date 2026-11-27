@@ -1,11 +1,14 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, GitBranch, Lock, Swords, Unlock } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lock, Swords, Unlock } from "lucide-react";
 import { api } from "../api";
-import type { SkillTreeNode } from "../types";
+import { SkillPlanet } from "./skill-tree/SkillPlanet";
+import type { MotionMode, SkillTreeNode } from "../types";
 import "../labs.css";
 
 interface Props {
+  motionMode: MotionMode;
   onOpenModule: (moduleId: string) => void;
+  onBack?: () => void;
 }
 
 interface ComputedEdge {
@@ -23,8 +26,9 @@ function tierTitle(colIdx: number, totalCols: number, hasBossTier: boolean): str
   return `Tier ${colIdx + 1} • Advanced Mastery`;
 }
 
-export function SkillTreeView({ onOpenModule }: Props) {
+export function SkillTreeView({ onOpenModule, motionMode, onBack }: Props) {
   const [nodes, setNodes] = useState<SkillTreeNode[]>([]);
+  const [view, setView] = useState<"planet" | "map">("planet");
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -241,62 +245,77 @@ export function SkillTreeView({ onOpenModule }: Props) {
       ro?.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [visibleEdges, columns]);
+  }, [visibleEdges, columns, view]);
 
-  if (loading) return <div className="card">Loading skill tree...</div>;
+  if (loading) return <p role="status" className="tree-loading">Loading skill tree…</p>;
 
   const completedTotal = visibleNodes.filter((n) => n.completed).length;
 
+  const viewToggle = (
+    <div className="tree-views" role="group" aria-label="Skill tree view">
+      <button type="button" aria-pressed={view === "planet"} onClick={() => setView("planet")}>
+        Planet
+      </button>
+      <button type="button" aria-pressed={view === "map"} onClick={() => setView("map")}>
+        Prerequisite map
+      </button>
+    </div>
+  );
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 }}>
-      <div className="card" style={{ minWidth: 0 }}>
-        <div className="st-header-row">
-          <div>
-            <h3 className="card-title" style={{ marginBottom: 6 }}>
-              <GitBranch size={18} color="#bb9af7" /> Developer RPG Skill Tree
-            </h3>
-            <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>
-              Progress left-to-right from Foundations through Intermediate Katas to Boss Projects. Hover any node to trace its mastery path, or click to jump straight in!
-            </p>
+    <div className={`tree-content${view === "planet" ? " is-planet" : " is-map"}`}>
+      {view === "planet" && visibleNodes.length > 0 ? (
+        <SkillPlanet
+          nodes={visibleNodes}
+          allNodes={nodes}
+          categories={categories}
+          activeCategory={activeCategory}
+          onChangeCategory={setActiveCategory}
+          completedTotal={completedTotal}
+          viewToggle={viewToggle}
+          motionMode={motionMode}
+          onBack={onBack}
+          onOpen={onOpenModule}
+        />
+      ) : (
+      <div className="tree-map-view">
+        <div className="tree-map-controls">
+          <div className="tree-map-topbar">
+            {onBack && (
+              <button type="button" className="tree-back-btn" data-testid="skill-tree-back" onClick={onBack}>
+                <ArrowLeft size={16} /> Back
+              </button>
+            )}
+            <h2 className="tree-title">Skill Tree</h2>
+            {viewToggle}
+            <small className="tree-completion">{completedTotal}/{visibleNodes.length} completed</small>
           </div>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-            <span className="badge badge-done">
-              {completedTotal}/{visibleNodes.length} Nodes Completed
-            </span>
-            <div className="st-legend">
-              <span className="st-legend-item">
-                <span className="st-swatch completed" /> Completed
-              </span>
-              <span className="st-legend-item">
-                <span className="st-swatch unlocked" /> Unlocked
-              </span>
-              <span className="st-legend-item">
-                <span className="st-swatch locked" /> Locked
-              </span>
-            </div>
+          <div className="tree-categories" role="tablist" aria-label="Filter skill tree by category">
+            {categories.map((cat) => (
+              <button
+                type="button"
+                key={cat.name}
+                role="tab"
+                aria-selected={activeCategory === cat.name}
+                onClick={() => setActiveCategory(cat.name)}
+              >
+                {cat.name}<span>{cat.count}</span>
+              </button>
+            ))}
           </div>
+          <select
+            className="tree-category-select"
+            aria-label="Filter skill tree by category"
+            value={activeCategory}
+            onChange={(e) => setActiveCategory(e.target.value)}
+          >
+            {categories.map((cat) => (
+              <option key={cat.name} value={cat.name}>
+                {cat.name} ({cat.count})
+              </option>
+            ))}
+          </select>
         </div>
-
-        {/* Category Filter Pills */}
-        <div className="st-filter-row" role="tablist" aria-label="Filter skill tree by category">
-          {categories.map((cat) => (
-            <button
-              key={cat.name}
-              type="button"
-              role="tab"
-              aria-selected={activeCategory === cat.name}
-              className={`st-filter-pill ${activeCategory === cat.name ? "active" : ""}`}
-              onClick={() => setActiveCategory(cat.name)}
-            >
-              {cat.name} ({cat.count})
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Layered SVG + Node Canvas */}
-      <div className="card" style={{ padding: "16px 14px", minWidth: 0 }}>
         {columns.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>No skill nodes match this category.</p>
         ) : (
@@ -454,6 +473,7 @@ export function SkillTreeView({ onOpenModule }: Props) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

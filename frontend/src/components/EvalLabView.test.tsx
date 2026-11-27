@@ -93,6 +93,18 @@ function makeOverview(overrides?: Partial<EvalLabOverview>): EvalLabOverview {
   };
 }
 
+function openVerdictWithEvidence() {
+  fireEvent.click(screen.getByRole("button", { name: "Compare responses" }));
+  fireEvent.click(screen.getByRole("button", { name: "Give verdict" }));
+  fireEvent.click(screen.getByRole("button", { name: "Reopen evidence" }));
+}
+
+function selectScenario(id: string) {
+  fireEvent.click(screen.getByText("Progress", {selector: "summary"}));
+  fireEvent.click(screen.getByTestId("eval-scenario-pill-" + id));
+  if (screen.queryByRole("button", {name: "Compare responses"})) openVerdictWithEvidence();
+}
+
 describe("EvalLabView intuitive progressive workflow", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -120,6 +132,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     fireEvent.click(screen.getByTestId("eval-start-scenario-1-btn"));
     expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
 
+    openVerdictWithEvidence();
     // Quick Review default: 7-axis matrix hidden, optional follow-up tucked behind toggle
     expect(screen.getByTestId("eval-mode-quick")).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByTestId("eval-7axis-matrix")).not.toBeInTheDocument();
@@ -139,11 +152,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(within(lineA1).getByText("Cited")).toBeInTheDocument();
 
     // Prev/Next scenario navigation works and resets draft cleanly
-    const prevBtn = screen.getByRole("button", { name: "Previous scenario" });
-    const nextBtn = screen.getByRole("button", { name: "Next scenario" });
-    expect(prevBtn).toBeDisabled();
-    expect(nextBtn).not.toBeDisabled();
-    fireEvent.click(nextBtn);
+    selectScenario("eval-py-test-cheat");
     expect(screen.getByText("Spot the Reward Hack: TTL Cache Expiration")).toBeInTheDocument();
     expect(screen.getByLabelText("Your evaluation rationale")).toHaveValue("");
     expect(screen.queryByLabelText("Follow-up prompt")).not.toBeInTheDocument();
@@ -165,6 +174,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     // Switch to Full 7-Axis Rubric
     fireEvent.click(screen.getByTestId("eval-mode-full"));
@@ -292,6 +302,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     // Switch to Full mode, rate Honesty, focus its empty note, then change Honesty to N/A
     fireEvent.click(screen.getByTestId("eval-mode-full"));
@@ -361,6 +372,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     const stronglyA = screen.getByTestId("eval-choice-strongly_a");
     stronglyA.focus();
@@ -513,6 +525,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(screen.getByLabelText("Repo / Project Name")).toHaveValue("example-oss/json-cli");
     expect(screen.getByLabelText("Verification Command")).toHaveValue("uv run pytest -v");
 
+    fireEvent.click(screen.getByRole("button", {name: "Define acceptance checks"}));
     // Creating the dry-run displays the active workspace with Step 3 Notes collapsed cleanly
     fireEvent.click(screen.getByTestId("eval-dryrun-create-btn"));
     await waitFor(() => {
@@ -578,6 +591,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     // Verify concise Scenario pill label avoids desktop truncation
     expect(screen.getByTestId("eval-scenario-pill-eval-py-test-cheat")).toHaveTextContent(
@@ -619,7 +633,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(screen.getByTestId("eval-approach-a")).toBeInTheDocument();
 
     // Switch to untouched Scenario 2 -> starts completely clean/empty with reset quote target
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-test-cheat"));
+    selectScenario("eval-py-test-cheat");
     expect(screen.getByText("Spot the Reward Hack: TTL Cache Expiration")).toBeInTheDocument();
     expect(screen.getByTestId("eval-transcripts-grid")).toBeInTheDocument();
     expect(screen.getByTestId("eval-choice-strongly_b")).toHaveAttribute("aria-checked", "false");
@@ -640,7 +654,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     fireEvent.click(screen.getByTestId("eval-choice-slightly_b"));
 
     // Switch back to Scenario 1 -> all unsaved edits restored seamlessly
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-async-timer"));
+    selectScenario("eval-py-async-timer");
     expect(screen.getByText("Asyncio Stale Fallback Timer Race")).toBeInTheDocument();
     expect(screen.getByTestId("eval-approach-a")).toBeInTheDocument();
     expect(screen.getByTestId("eval-choice-strongly_b")).toHaveAttribute("aria-checked", "true");
@@ -674,7 +688,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(screen.getByLabelText("Follow-up prompt")).toBeInTheDocument();
 
     // Switch back to Scenario 2 -> Scenario 2's own edits survived independently & follow-up stays hidden
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-test-cheat"));
+    selectScenario("eval-py-test-cheat");
     expect(screen.getByTestId("eval-choice-slightly_b")).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText("Your evaluation rationale")).toHaveValue(
       '"[A1] edit_file(\'test_cache.py\') -> relaxed assertion"'
@@ -722,6 +736,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     // Full mode on Scenario 1: rate Honesty, focus its note, then Collapse the 7-axis matrix
     fireEvent.click(screen.getByTestId("eval-mode-full"));
@@ -755,7 +770,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(within(screen.getByTestId("eval-transcript-line-A2")).getByText("Cited")).toBeInTheDocument();
 
     // Switch to Scenario 2: unrated, no cited A2 badge, Reset on Scenario 2 does not affect Scenario 1
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-test-cheat"));
+    selectScenario("eval-py-test-cheat");
     expect(within(screen.getByTestId("eval-7axis-matrix")).getByText(/0\/7 rated/i)).toBeInTheDocument();
     expect(within(screen.getByTestId("eval-transcript-line-A2")).queryByText("Cited")).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId("eval-axis-select-scoping"), {
@@ -765,7 +780,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(within(screen.getByTestId("eval-7axis-matrix")).getByText(/0\/7 rated/i)).toBeInTheDocument();
 
     // Return to Scenario 1: 7/7 rated & Honesty note survived; switching to Quick hides A2 citation & isolates payload
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-async-timer"));
+    selectScenario("eval-py-async-timer");
     expect(within(screen.getByTestId("eval-7axis-matrix")).getByText(/7\/7 rated/i)).toBeInTheDocument();
     expect(screen.getByTestId("eval-axis-note-honesty")).toHaveValue('Contradicted "[A2]" output.');
     fireEvent.click(screen.getByTestId("eval-mode-quick"));
@@ -800,6 +815,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     await waitFor(() => {
       expect(screen.getByTestId("eval-scenario-active")).toBeInTheDocument();
     });
+    openVerdictWithEvidence();
 
     // Start submitting Scenario 1
     fireEvent.click(screen.getByTestId("eval-choice-strongly_b"));
@@ -808,10 +824,10 @@ describe("EvalLabView intuitive progressive workflow", () => {
     expect(screen.getByTestId("eval-submit-btn")).toHaveTextContent(/Calibrating Review/i);
 
     // Switch to Scenario 2 while Scenario 1 is still in flight -> Scenario 2 must NOT be stuck loading
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-test-cheat"));
+    selectScenario("eval-py-test-cheat");
     fireEvent.click(screen.getByTestId("eval-choice-strongly_b"));
     expect(screen.getByTestId("eval-submit-btn")).not.toBeDisabled();
-    expect(screen.getByTestId("eval-submit-btn")).toHaveTextContent(/Submit & Compare with Senior Key/i);
+    expect(screen.getByTestId("eval-submit-btn")).toHaveTextContent(/Submit for calibration/i);
 
     // Fail Scenario 1 while viewing Scenario 2 -> Scenario 2 shows NO error
     resolveS1({
@@ -825,7 +841,7 @@ describe("EvalLabView intuitive progressive workflow", () => {
     });
 
     // Switch back to Scenario 1 -> its error is surfaced and button is re-enabled
-    fireEvent.click(screen.getByTestId("eval-scenario-pill-eval-py-async-timer"));
+    selectScenario("eval-py-async-timer");
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/Temporary calibration outage/i);
     });

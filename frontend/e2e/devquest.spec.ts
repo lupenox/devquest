@@ -285,10 +285,12 @@ def moving_average(values, window):
   await expect(page.getByTestId("sprint-summary")).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId("sprint-bonus-xp")).toContainText(/\+[1-9]\d* XP/);
 
-  // 9. Verify Interactive SVG Skill Tree renders <path> prerequisite connectors
+  // 9. Verify Immersive Skill Planet & Interactive SVG Skill Tree renders <path> prerequisite connectors
   await page.getByRole("button", { name: /skill tree/i }).click();
   await expect(page).toHaveURL(/\/tree$/);
-  await expect(page.getByText("Developer RPG Skill Tree")).toBeVisible();
+  await expect(page.getByTestId("skill-tree-back")).toBeVisible();
+  await expect(page.getByTestId("landmark-details")).toHaveCount(0);
+  await page.getByRole("button", { name: "Prerequisite map" }).click();
   const svgPaths = page.locator('svg[data-testid="skill-tree-connectors"] path.st-edge');
   await expect(svgPaths.first()).toBeVisible({ timeout: 10000 });
   expect(await svgPaths.count()).toBeGreaterThanOrEqual(6);
@@ -302,6 +304,10 @@ def moving_average(values, window):
       animations: "disabled",
     });
   }
+
+  // Return via the simple Back button to reach the main navigation shell
+  await page.getByTestId("skill-tree-back").click();
+  await expect(page.locator("nav.nav-tabs")).toBeVisible();
 
   // 10. Verify Repo Mock Interviewer grades an answer and displays Readiness %
   await page.getByRole("button", { name: /repo interview prep/i }).click();

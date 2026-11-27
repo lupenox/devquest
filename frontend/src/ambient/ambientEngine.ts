@@ -175,18 +175,20 @@ const SKY_FRAGMENT_SHADER = /* glsl */ `
     float clouds = smoothstep(0.15, 0.92, (wisp1 * 0.55 + wisp2 * 0.45) * 0.5 + 0.5) * cloudBand;
     col = mix(col, mix(uHorizon, uSun, 0.58), clouds * mix(0.08, 0.24, uIsLight));
 
-    // 3. Radiant upper-right sunburst flare + soft diagonal Aero light beams
-    vec2 sunPos = vec2(0.46 * uAspect, 0.44) + uPointer * vec2(0.04, 0.03);
+    // 3. Soft sunlit atmospheric bloom & broad diagonal light wash (no harsh radial pinwheel)
+    vec2 sunPos = vec2(0.58 * uAspect, 0.56) + uPointer * vec2(0.03, 0.025);
     vec2 dSun = p - sunPos;
     float sunDist = length(dSun);
-    float sunCore = exp(-sunDist * 3.1) * (0.48 + uPulse * 0.22);
-    float sunHalo = exp(-sunDist * 1.15) * (0.34 + uPulse * 0.14);
+    float sunCore = exp(-sunDist * 2.2) * (0.42 + uPulse * 0.18);
+    float sunHalo = exp(-sunDist * 0.72) * (0.30 + uPulse * 0.12);
 
-    float angle = atan(dSun.y, dSun.x);
-    float rays = pow(0.5 + 0.5 * sin(angle * 7.0 + t * 0.35), 3.0) * 0.55
-               + pow(0.5 + 0.5 * sin(angle * 11.0 - t * 0.22 + 1.4), 4.0) * 0.45;
-    float rayMask = exp(-sunDist * 1.1) * rays * uRayStrength;
-    col += uSun * (sunCore * mix(0.24, 0.52, uIsLight) + sunHalo * mix(0.16, 0.32, uIsLight) + rayMask);
+    // Wide, gentle diagonal light wash drifting smoothly across the upper sky
+    float diagCoord = p.x * 0.65 - p.y * 0.95;
+    float shaft1 = smoothstep(0.0, 1.0, 0.5 + 0.5 * sin(diagCoord * 2.6 + t * 0.25));
+    float shaft2 = smoothstep(0.15, 1.0, 0.5 + 0.5 * sin(diagCoord * 4.2 - t * 0.18 + 1.2));
+    float upperFade = smoothstep(-0.22, 0.45, p.y) * exp(-sunDist * 0.62);
+    float lightWash = (shaft1 * 0.65 + shaft2 * 0.35) * upperFade * uRayStrength * 0.52;
+    col += uSun * (sunCore * mix(0.20, 0.42, uIsLight) + sunHalo * mix(0.14, 0.28, uIsLight) + lightWash);
 
     // 4. Secondary soft left-sky bokeh bloom
     vec2 leftOrb = vec2(-0.42 * uAspect, 0.28) - uPointer * vec2(0.03, 0.02);
@@ -369,7 +371,7 @@ const MOTE_VERTEX_SHADER = /* glsl */ `
     vAlpha = edgeFade * twinkle;
     vSparkle = step(0.72, fract(aPhase * 1.37));
 
-    gl_PointSize = aSize * uPixelRatio * (10.0 / max(2.5, -mvPosition.z));
+    gl_PointSize = aSize * uPixelRatio * (13.6 / max(3.5, -mvPosition.z));
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -451,8 +453,9 @@ export function createAmbientEngine(options: AmbientInitOptions): AmbientControl
   renderer.setClearColor(0x000000, 0);
 
   const scene = new Scene();
-  const camera = new PerspectiveCamera(44, 1, 0.1, 40);
-  camera.position.set(0, 0, 11.5);
+  // Narrower FOV avoids wide-angle oval distortion on bubbles near viewport corners
+  const camera = new PerspectiveCamera(32, 1, 0.1, 50);
+  camera.position.set(0, 0, 15.8);
 
   let targetPalette = PALETTES[options.theme] || PALETTES["frutiger-aero"];
 

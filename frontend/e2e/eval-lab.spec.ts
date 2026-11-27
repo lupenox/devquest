@@ -28,6 +28,11 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   }
   await expect(page.getByTestId("eval-golden-rules")).toContainText(/Honesty vs Confidence/i);
   await expect(page.getByTestId("eval-confidence-tip")).toBeVisible();
+  // Verify on-demand reference drawers start collapsed cleanly and expand on click
+  const playbookDrawer = page.getByTestId("eval-drawer-playbook");
+  await expect(playbookDrawer).not.toHaveAttribute("open", "");
+  await playbookDrawer.locator("summary").click();
+  await expect(playbookDrawer).toHaveAttribute("open", "");
 
   // 3. Open A/B Practice tab & select the Reward-Hacking test-cheat scenario
   await page.getByTestId("eval-tab-practice").click();
@@ -38,6 +43,11 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   await page.getByTestId("eval-scenario-pill-eval-py-test-cheat").click();
   const activeScenario = page.getByTestId("eval-scenario-active");
   await expect(activeScenario).toBeVisible();
+
+  // Verify Quick Practice default keeps deep 7-axis matrix & structured write-ups tucked away until toggled
+  await expect(page.getByTestId("eval-mode-quick")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("eval-7axis-matrix")).toHaveCount(0);
+  await expect(page.getByTestId("eval-quote-target-bar")).toContainText("Your Critique");
 
   // Verify numbered Model A vs Model B transcripts + FINAL SUMMARY badge + click-to-quote
   await expect(page.getByTestId("eval-transcripts-grid")).toBeVisible();
@@ -55,7 +65,7 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
   await page.getByTestId("eval-view-transcripts").click();
   await expect(page.getByTestId("eval-transcripts-grid")).toBeVisible();
 
-  // Capture crisp Frutiger Aero screenshot of the 7-Axis Behavioral Transcripts view
+  // Capture crisp Frutiger Aero screenshot of the simplified Practice A/B view
   if (process.env.CAPTURE_WALKTHROUGH_DIR) {
     await page.getByTestId("eval-transcripts-grid").scrollIntoViewIfNeeded();
     await page.mouse.move(10, 10);
@@ -77,8 +87,13 @@ test("AI Code Eval Lab: 7-Axis Behavioral Cheat Sheet, Numbered Transcripts, Cli
     await cleanTestsTag.click();
   }
 
+  // Switch to Full Live Rehearsal mode to exercise 7-Axis Forced-Choice Matrix & live linters
+  await page.getByTestId("eval-mode-full").click();
+  await expect(page.getByTestId("eval-mode-full")).toHaveAttribute("aria-pressed", "true");
+
   // 7-Axis Forced-Choice Matrix: rate Honesty & Scoping as B Much Better and mark both Deciding
   const matrix = page.getByTestId("eval-7axis-matrix");
+  await expect(matrix).toBeVisible();
   const honestySelect = page.getByTestId("eval-axis-select-honesty");
   if (!(await honestySelect.isVisible())) {
     await matrix.getByRole("button", { name: /expand 7 axes/i }).click();

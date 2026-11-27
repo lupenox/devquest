@@ -6,16 +6,20 @@ import {
   GitBranch,
   LayoutDashboard,
   Palette,
+  Pause,
   RefreshCw,
   Scale,
   Search,
   Shield,
+  Sparkles,
   Swords,
   Terminal,
   Trophy,
+  Wind,
   Zap,
 } from "lucide-react";
 import { api, connectEvents } from "./api";
+import { AmbientBackdrop } from "./components/AmbientBackdrop";
 import { BossProjectsView } from "./components/BossProjectsView";
 import { CommandPalette } from "./components/CommandPalette";
 import { DashboardView, fallbackRankTitle } from "./components/DashboardView";
@@ -33,7 +37,7 @@ import {
   type AppRoute,
   type NavTab,
 } from "./router";
-import type { DashboardData, GradeOutcome, SprintCompleteResp, ThemeId, UnlockedAchievement } from "./types";
+import type { DashboardData, GradeOutcome, MotionMode, SprintCompleteResp, ThemeId, UnlockedAchievement } from "./types";
 import "./dashboard-shell.css";
 
 const NAV_ITEMS = [
@@ -48,6 +52,7 @@ const NAV_ITEMS = [
 ] as const;
 
 const THEME_STORAGE_KEY = "devquest_theme";
+const MOTION_STORAGE_KEY = "devquest_motion";
 const VALID_THEMES: ThemeId[] = [
   "frutiger-aero",
   "emerald-3d",
@@ -56,6 +61,25 @@ const VALID_THEMES: ThemeId[] = [
   "gruvbox",
   "kanagawa",
 ];
+const VALID_MOTIONS: MotionMode[] = ["full", "subtle", "off"];
+
+const MOTION_META: Record<MotionMode, { label: string; title: string; next: MotionMode }> = {
+  full: {
+    label: "3D Aero",
+    title: "Living 3D Aero backdrop active (click to switch to Calm CSS mode)",
+    next: "subtle",
+  },
+  subtle: {
+    label: "Calm",
+    title: "Calm CSS ambiance active (click to switch to Reduced Motion mode)",
+    next: "off",
+  },
+  off: {
+    label: "Static",
+    title: "Reduced motion active (click to re-enable Living 3D Aero backdrop)",
+    next: "full",
+  },
+};
 
 const THEME_META_COLORS: Record<ThemeId, string> = {
   "frutiger-aero": "#0284c7",
@@ -76,6 +100,23 @@ function loadInitialTheme(): ThemeId {
   return "frutiger-aero";
 }
 
+function loadInitialMotion(): MotionMode {
+  try {
+    const saved = window.localStorage.getItem(MOTION_STORAGE_KEY) as MotionMode | null;
+    if (saved && VALID_MOTIONS.includes(saved)) return saved;
+  } catch {
+    // ignore storage errors
+  }
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    return "off";
+  }
+  return "full";
+}
+
 function isEditableElement(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -90,6 +131,8 @@ function isEditableElement(target: EventTarget | null): boolean {
 export function App() {
   const [route, setRoute] = useState<AppRoute>(() => getCurrentRoute());
   const [theme, setTheme] = useState<ThemeId>(() => loadInitialTheme());
+  const [motionMode, setMotionMode] = useState<MotionMode>(() => loadInitialMotion());
+  const [celebrationTick, setCelebrationTick] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -130,6 +173,20 @@ export function App() {
     }
   }, []);
 
+  const applyMotionMode = useCallback((next: MotionMode) => {
+    setMotionMode(next);
+    document.documentElement.setAttribute("data-motion", next);
+    try {
+      window.localStorage.setItem(MOTION_STORAGE_KEY, next);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const cycleMotionMode = useCallback(() => {
+    applyMotionMode(MOTION_META[motionMode].next);
+  }, [applyMotionMode, motionMode]);
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -137,6 +194,10 @@ export function App() {
       meta.setAttribute("content", THEME_META_COLORS[theme] || "#0284c7");
     }
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-motion", motionMode);
+  }, [motionMode]);
 
   // URL History API synchronization
   useEffect(() => {
@@ -192,15 +253,18 @@ export function App() {
         setLiveOutcome(res);
         loadDashboard();
         if (res.passed) {
+          setCelebrationTick((n) => n + 1);
           const bonusTxt = res.par_bonus ? ` + ${res.par_bonus} Vim Par Bonus!` : "";
           showToast(
             `✓ ${res.tech_name} Mastery ${Math.round(res.tech_mastery_pct)}% (+${res.xp_awarded} XP${bonusTxt})`
           );
         }
         if (res.unlocked_achievements && res.unlocked_achievements.length > 0) {
+          setCelebrationTick((n) => n + 1);
           showAchievementToast(res.unlocked_achievements);
         }
       } else if (evt.type === "achievement_unlocked") {
+        setCelebrationTick((n) => n + 1);
         loadDashboard();
         const payload = evt.payload;
         if (Array.isArray(payload)) {
@@ -283,9 +347,11 @@ export function App() {
     (resp: SprintCompleteResp) => {
       loadDashboard();
       if (resp.bonus_xp > 0) {
+        setCelebrationTick((n) => n + 1);
         showToast(`⚡ Sprint Complete! +${resp.bonus_xp} Combo Bonus XP`);
       }
       if (resp.unlocked_achievements && resp.unlocked_achievements.length > 0) {
+        setCelebrationTick((n) => n + 1);
         showAchievementToast(resp.unlocked_achievements);
       }
     },
@@ -300,6 +366,8 @@ export function App() {
   const activeModuleId = route.moduleId;
   const useCompactShell = !activeModuleId && (activeTab === "dashboard" || activeTab === "tracks");
   const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
+  const motionInfo = MOTION_META[motionMode];
+  const viewStageKey = activeModuleId ? `mod:${activeModuleId}` : `${activeTab}:${route.techSlug || ""}`;
 
   const connection = (
     <div className="hud-pill connection-status" title="Live Neovim WebSocket connection">
@@ -309,7 +377,9 @@ export function App() {
   );
 
   return (
-    <div className={useCompactShell ? "app-shell dashboard-shell" : "app-shell"}>
+    <>
+      <AmbientBackdrop theme={theme} motionMode={motionMode} celebrationTick={celebrationTick} />
+      <div className={useCompactShell ? "app-shell dashboard-shell" : "app-shell"}>
       <header className="hud-header">
         <a
           className="brand-row brand-home"
@@ -348,6 +418,24 @@ export function App() {
             <Search size={14} />
             <span>Search...</span>
             <kbd className="kbd">Ctrl+K</kbd>
+          </button>
+
+          <button
+            type="button"
+            className={`motion-toggle mode-${motionMode}`}
+            data-testid="motion-toggle"
+            aria-label={`Visual effects: ${motionInfo.label}. Click to cycle motion mode.`}
+            title={motionInfo.title}
+            onClick={cycleMotionMode}
+          >
+            {motionMode === "full" ? (
+              <Sparkles size={14} aria-hidden="true" />
+            ) : motionMode === "subtle" ? (
+              <Wind size={14} aria-hidden="true" />
+            ) : (
+              <Pause size={14} aria-hidden="true" />
+            )}
+            <span className="motion-toggle-label">{motionInfo.label}</span>
           </button>
 
           <label className="hud-pill theme-pill" title="Switch Neovim Color Theme">
@@ -419,6 +507,7 @@ export function App() {
       )}
 
       <main>
+        <div className="view-stage" key={viewStageKey}>
         {activeModuleId ? (
           <ModuleView
             key={activeModuleId}
@@ -465,6 +554,7 @@ export function App() {
         ) : (
           <SyncAndForgeView dashboard={dashboard} onSynced={loadDashboard} onOpenModule={openModule} />
         )}
+        </div>
       </main>
 
       {/* Mobile PWA Bottom Navigation Bar */}
@@ -491,11 +581,13 @@ export function App() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         currentTheme={theme}
+        motionMode={motionMode}
         technologies={dashboard?.technologies}
         onNavigateTab={openTab}
         onSelectTech={openTech}
         onOpenModule={openModule}
         onChangeTheme={applyTheme}
+        onChangeMotionMode={applyMotionMode}
         onSyncGithub={handleSyncGithub}
       />
 
@@ -514,7 +606,8 @@ export function App() {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 export default App;

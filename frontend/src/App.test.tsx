@@ -517,5 +517,24 @@ describe("DevQuest UI Components", () => {
 
     fireEvent.change(switcher, { target: { value: "gruvbox" } });
     expect(document.documentElement.getAttribute("data-theme")).toBe("gruvbox");
+
+    // Verify Living 3D Aero / Calm / Static motion mode cycling & persistence
+    const backdrop = screen.getByTestId("ambient-backdrop");
+    expect(document.documentElement.getAttribute("data-motion")).toBe("full");
+    expect(backdrop).toHaveAttribute("data-mode", "full");
+
+    const motionBtn = screen.getByTestId("motion-toggle");
+    fireEvent.click(motionBtn);
+    expect(document.documentElement.getAttribute("data-motion")).toBe("subtle");
+    expect(window.localStorage.getItem("devquest_motion")).toBe("subtle");
+    expect(backdrop).toHaveAttribute("data-mode", "subtle");
+
+    fireEvent.click(motionBtn);
+    expect(document.documentElement.getAttribute("data-motion")).toBe("off");
+    expect(window.localStorage.getItem("devquest_motion")).toBe("off");
+
+    fireEvent.click(motionBtn);
+    expect(document.documentElement.getAttribute("data-motion")).toBe("full");
+    expect(window.localStorage.getItem("devquest_motion")).toBe("full");
   });
 });

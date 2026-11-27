@@ -125,6 +125,8 @@
   --practice-ink: var(--text);
   --practice-muted: var(--text-muted);
   --practice-edge: color-mix(in srgb, var(--practice-ink) 22%, transparent);
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -133,15 +135,46 @@
   border: 1px solid var(--border);
   background: linear-gradient(125deg, var(--bg-card), color-mix(in srgb, var(--accent) 14%, var(--bg-code)));
   box-shadow: inset 0 1px 0 #ffffff18;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
+}
+
+.practice-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.practice-panel::after {
+  content: "";
+  position: absolute;
+  top: -38%;
+  right: -18%;
+  width: 68%;
+  height: 112%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 62%);
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloatB 16s ease-in-out infinite;
 }
 
 [data-theme="frutiger-aero"] .practice-panel {
   --practice-ink: #f5fdff;
-  --practice-muted: #c7e8f0;
-  background: radial-gradient(ellipse at 100% 0%, #13828c66, transparent 65%),
-    linear-gradient(125deg, #0c354e, #075a68);
-  border-color: #f0ffff;
-  box-shadow: inset 0 1px 0 #ffffff55, 0 8px 22px #0b4e721a;
+  --practice-muted: #d2f1f8;
+  background:
+    radial-gradient(ellipse 74% 62% at 96% 4%, rgba(56, 189, 248, 0.42), transparent 64%),
+    radial-gradient(ellipse 56% 52% at 6% 100%, rgba(34, 197, 94, 0.3), transparent 64%),
+    linear-gradient(132deg, rgba(7, 56, 92, 0.92) 0%, rgba(7, 96, 120, 0.88) 54%, rgba(12, 124, 114, 0.88) 100%);
+  backdrop-filter: blur(18px) saturate(165%);
+  -webkit-backdrop-filter: blur(18px) saturate(165%);
+  border-color: rgba(255, 255, 255, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 0 -1px 0 rgba(103, 232, 249, 0.24),
+    0 14px 34px rgba(7, 89, 133, 0.24);
+}
+
+[data-theme="frutiger-aero"] .practice-panel::after {
+  background: radial-gradient(circle, rgba(165, 243, 252, 0.28) 0%, rgba(74, 222, 128, 0.11) 36%, transparent 62%);
 }
 
 .practice-caption,
@@ -209,8 +242,21 @@
 }
 
 [data-theme="frutiger-aero"] .practice-start {
-  background: linear-gradient(180deg, #fff, #dcf6fb);
-  color: #0b3d53;
+  background: linear-gradient(180deg, #ffffff 0%, #e4f8ff 52%, #cceffc 100%);
+  color: #083952;
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 6px 16px rgba(4, 44, 72, 0.24);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, filter 0.16s ease;
+}
+
+[data-theme="frutiger-aero"] .practice-start:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 10px 22px rgba(4, 44, 72, 0.28);
+  filter: brightness(1.02);
 }
 
 .practice-start:hover, .practice-sprints button:hover { filter: brightness(.94); }

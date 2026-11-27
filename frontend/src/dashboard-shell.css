@@ -44,7 +44,8 @@
 }
 
 .dashboard-shell .theme-pill,
-.dashboard-shell .cmd-trigger {
+.dashboard-shell .cmd-trigger,
+.dashboard-shell .motion-toggle {
   min-height: 2.25rem;
   border-color: var(--border-subtle);
 }
@@ -115,10 +116,12 @@
   .dashboard-shell .brand-icon { width: 26px; height: 26px; }
   .dashboard-shell .brand-icon svg { width: 16px; height: 16px; }
   .dashboard-shell .cmd-trigger { justify-content: center; width: 2.4rem; height: 2.4rem; }
+  .dashboard-shell .motion-toggle { justify-content: center; width: 2.25rem; height: 2.25rem; padding: 0; }
   .dashboard-shell .cmd-trigger span,
   .dashboard-shell .cmd-trigger kbd,
+  .dashboard-shell .motion-toggle-label,
   .dashboard-shell .theme-pill svg { display: none; }
-  .dashboard-shell .theme-select { max-width: 7.6rem; height: 2.25rem; }
+  .dashboard-shell .theme-select { max-width: 7.4rem; height: 2.25rem; }
   .dashboard-shell .theme-pill { padding: 0 .25rem; }
 
   .app-shell.dashboard-shell .nav-tabs {
@@ -127,8 +130,8 @@
   }
 
   .app-shell.dashboard-shell .nav-btn {
-    padding: .4rem .1rem;
-    font-size: .8rem;
+    padding: .42rem .22rem;
+    font-size: .74rem;
   }
 
   .dashboard-shell .nav-btn svg { display: none; }

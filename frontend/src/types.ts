@@ -6,6 +6,8 @@ export type ThemeId =
   | "gruvbox"
   | "kanagawa";
 
+export type MotionMode = "full" | "subtle" | "off";
+
 export interface Technology {
   slug: string;
   name: string;

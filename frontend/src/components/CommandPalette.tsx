@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import type { NavTab } from "../router";
-import type { SearchResults, Technology, ThemeId } from "../types";
+import type { MotionMode, SearchResults, Technology, ThemeId } from "../types";
 
 interface PaletteItem {
   id: string;
@@ -32,13 +32,21 @@ interface Props {
   open: boolean;
   onClose: () => void;
   currentTheme: ThemeId;
+  motionMode?: MotionMode;
   technologies?: Technology[];
   onNavigateTab: (tab: NavTab, sprintMinutes?: number) => void;
   onSelectTech: (slug: string) => void;
   onOpenModule: (moduleId: string) => void;
   onChangeTheme: (theme: ThemeId) => void;
+  onChangeMotionMode?: (mode: MotionMode) => void;
   onSyncGithub: () => void;
 }
+
+const MOTION_OPTIONS: { id: MotionMode; label: string; desc: string }[] = [
+  { id: "full", label: "3D Aero (Live Three.js)", desc: "Lightweight 30 FPS iridescent 3D bubbles & sunlit aurora" },
+  { id: "subtle", label: "Calm CSS", desc: "Zero WebGL — pure CSS Frutiger Aero sunbeam & bokeh glow" },
+  { id: "off", label: "Static (Reduced Motion)", desc: "Disable ambient animations for maximum focus & battery" },
+];
 
 const THEMES: { id: ThemeId; label: string; desc: string }[] = [
   { id: "frutiger-aero", label: "Frutiger Aero", desc: "Glossy aqua sky glass, bokeh orbs & leaf green (Default)" },
@@ -65,11 +73,13 @@ export function CommandPalette({
   open,
   onClose,
   currentTheme,
+  motionMode,
   technologies = [],
   onNavigateTab,
   onSelectTech,
   onOpenModule,
   onChangeTheme,
+  onChangeMotionMode,
   onSyncGithub,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -203,9 +213,20 @@ export function CommandPalette({
         keywords: `switch theme color palette neovim ${t.id} ${t.label} ${t.desc}`,
         run: () => onChangeTheme(t.id),
       })),
+      ...(onChangeMotionMode
+        ? MOTION_OPTIONS.map((m) => ({
+            id: `action-motion-${m.id}`,
+            group: "Quick Actions" as const,
+            title: `Visual Motion → ${m.label}`,
+            subtitle: m.id === motionMode ? `${m.desc} (Active)` : m.desc,
+            badge: "Motion",
+            keywords: `motion animation threejs 3d aero calm reduced static performance battery ${m.id} ${m.label}`,
+            run: () => onChangeMotionMode(m.id),
+          }))
+        : []),
     ];
     return actions;
-  }, [currentTheme, onChangeTheme, onNavigateTab, onSyncGithub]);
+  }, [currentTheme, motionMode, onChangeMotionMode, onChangeTheme, onNavigateTab, onSyncGithub]);
 
   const items = useMemo<PaletteItem[]>(() => {
     const q = query.trim();

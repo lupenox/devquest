@@ -119,6 +119,19 @@ test("DevQuest v2.0 full E2E: Command Palette, SPA routing, pdb_sim, Playgrounds
   await switcher.selectOption("frutiger-aero");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "frutiger-aero");
 
+  // 3a. Verify Living 3D Aero Ambient Backdrop & Motion Mode Toggle (full -> subtle -> off -> full)
+  const backdrop = page.getByTestId("ambient-backdrop");
+  await expect(backdrop).toBeAttached();
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "full");
+  const motionToggle = page.getByTestId("motion-toggle");
+  await motionToggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "subtle");
+  await expect(backdrop).toHaveAttribute("data-mode", "subtle");
+  await motionToggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "off");
+  await motionToggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "full");
+
   // 3b. Verify Frutiger Aero color-scheme: light and high-contrast <select>/<option> colors
   const themeColors = await page.evaluate(() => {
     const htmlCs = getComputedStyle(document.documentElement).colorScheme;

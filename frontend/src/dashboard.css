@@ -262,7 +262,7 @@
   border-top: 1px solid var(--practice-edge);
 }
 
-.practice-sprints > div { display: flex; gap: .3rem; }
+.practice-sprints > div { display: flex; flex-wrap: wrap; gap: .3rem; }
 
 .practice-sprints button {
   min-height: 2rem;
@@ -274,6 +274,12 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.practice-eval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
 }
 
 .dashboard-home .progress-panel { padding: clamp(1.15rem, 2.5vw, 1.75rem); }

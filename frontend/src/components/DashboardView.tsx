@@ -1,4 +1,4 @@
-import { ArrowRight, Calendar, ChevronDown, Clock, Shield, Sparkles, Timer } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, Clock, Scale, Shield, Sparkles, Timer } from "lucide-react";
 import { pushRoute } from "../router";
 import type { DashboardData } from "../types";
 import { RichText } from "./RichText";
@@ -12,6 +12,7 @@ interface Props {
   onGoToForge: () => void;
   onStartSprint?: (durationMinutes?: number) => void;
   onOpenRepos?: () => void;
+  onOpenEvalLab?: () => void;
 }
 
 function formatCountdown(hoursUntil: number): string {
@@ -38,7 +39,15 @@ function drillTitle(item: { title: string }) {
   return <RichText text={item.title.replace(/^Participation Activity:\s*/i, "")} />;
 }
 
-export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, onStartSprint, onOpenRepos }: Props) {
+export function DashboardView({
+  data,
+  onSelectTech,
+  onOpenModule,
+  onGoToForge,
+  onStartSprint,
+  onOpenRepos,
+  onOpenEvalLab,
+}: Props) {
   const practice: Practice[] = data.daily_warmup?.length ? data.daily_warmup : data.recommended_next;
   const [next, ...more] = practice;
   const goalPct = Math.min(100, Math.round(data.today_xp / Math.max(1, data.daily_xp_target) * 100));
@@ -51,6 +60,15 @@ export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, o
       return;
     }
     pushRoute({ tab: "repos", techSlug: null, moduleId: null });
+    window.dispatchEvent(new Event("popstate"));
+  };
+
+  const openEvalLab = () => {
+    if (onOpenEvalLab) {
+      onOpenEvalLab();
+      return;
+    }
+    pushRoute({ tab: "eval-lab", techSlug: null, moduleId: null });
     window.dispatchEvent(new Event("popstate"));
   };
 
@@ -171,6 +189,14 @@ export function DashboardView({ data, onSelectTech, onOpenModule, onGoToForge, o
                     {minutes} min
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className="practice-eval-pill"
+                  data-testid="dashboard-eval-lab-link"
+                  onClick={openEvalLab}
+                >
+                  <Scale size={14} aria-hidden="true" /> Practice AI Code Eval
+                </button>
               </div>
             </div>
           )}

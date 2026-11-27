@@ -385,7 +385,7 @@ test("browse tracks, search, open a chapter and return to its syllabus", async (
   const tracks = page.locator('main a[data-testid^="track-link-"]');
   await expect(tracks).toHaveCount(17);
   await expect(page.locator('[data-testid^="track-module-"]')).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button")).toHaveCount(7);
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button")).toHaveCount(8);
 
   const shotDir = process.env.CAPTURE_WALKTHROUGH_DIR;
   if (shotDir) {

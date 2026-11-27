@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Palette,
   RefreshCw,
+  Scale,
   Search,
   Shield,
   Swords,
@@ -18,6 +19,7 @@ import { api, connectEvents } from "./api";
 import { BossProjectsView } from "./components/BossProjectsView";
 import { CommandPalette } from "./components/CommandPalette";
 import { DashboardView, fallbackRankTitle } from "./components/DashboardView";
+import { EvalLabView } from "./components/EvalLabView";
 import { ModuleView } from "./components/ModuleView";
 import { RepoInterviewView } from "./components/RepoInterviewView";
 import { SkillTreeView } from "./components/SkillTreeView";
@@ -39,6 +41,7 @@ const NAV_ITEMS = [
   { tab: "tracks", label: "Tracks & zyBooks", compact: "Tracks", mobile: "Tracks", Icon: BookOpen },
   { tab: "sprint", label: "AI Break Sprint", compact: "Sprint", mobile: "Sprint", Icon: Zap },
   { tab: "repos", label: "Repo Interview Prep", compact: "Repo prep", mobile: "Repos", Icon: FolderGit2 },
+  { tab: "eval-lab", label: "AI Eval Lab", compact: "Eval Lab", mobile: null, Icon: Scale },
   { tab: "tree", label: "Skill Tree", compact: "Skill tree", mobile: "Tree", Icon: GitBranch },
   { tab: "projects", label: "Boss Projects", compact: "Projects", mobile: null, Icon: Swords },
   { tab: "forge", label: "Sync & AI Forge", compact: "AI Forge", mobile: null, Icon: RefreshCw },
@@ -211,7 +214,9 @@ export function App() {
         evt.type === "sync_complete" ||
         evt.type === "module_generated" ||
         evt.type === "sprint_completed" ||
-        evt.type === "interview_completed"
+        evt.type === "interview_completed" ||
+        evt.type === "campaign_updated" ||
+        evt.type === "eval_submitted"
       ) {
         loadDashboard();
       }
@@ -431,6 +436,8 @@ export function App() {
             onOpenModule={openModule}
             onGoToForge={() => openTab("forge")}
             onStartSprint={(mins) => openTab("sprint", mins)}
+            onOpenRepos={() => openTab("repos")}
+            onOpenEvalLab={() => openTab("eval-lab")}
           />
         ) : activeTab === "tracks" ? (
           <TracksView
@@ -449,6 +456,8 @@ export function App() {
           />
         ) : activeTab === "repos" ? (
           <RepoInterviewView onOpenModule={openModule} onUpdated={loadDashboard} />
+        ) : activeTab === "eval-lab" ? (
+          <EvalLabView onUpdated={loadDashboard} />
         ) : activeTab === "tree" ? (
           <SkillTreeView onOpenModule={openModule} />
         ) : activeTab === "projects" ? (

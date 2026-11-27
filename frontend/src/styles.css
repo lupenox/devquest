@@ -400,22 +400,23 @@ select option:checked,
 .nav-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 20px;
 }
 
 .nav-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
+  gap: 5px;
+  padding: 7px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg-elev);
   color: var(--text-muted);
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.87rem;
+  font-size: 0.81rem;
+  white-space: nowrap;
   transition: all 0.16s ease;
 }
 

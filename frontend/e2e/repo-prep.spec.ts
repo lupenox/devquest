@@ -39,7 +39,7 @@ test("select a connected repository and use the shared interview prep actions", 
   const browser = page.getByTestId("repo-browser");
   await expect(browser.locator("summary")).toContainText("40");
   await expect(browser).not.toHaveAttribute("open", "");
-  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button")).toHaveCount(7);
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button")).toHaveCount(8);
 
   const saved = page.getByRole("region", { name: "Saved study packs" }).getByRole("button", { name: "Open pack" });
   await saved.click();

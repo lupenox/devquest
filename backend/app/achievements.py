@@ -115,6 +115,14 @@ ACHIEVEMENTS: list[dict[str, Any]] = [
         "bonus_xp": 75,
         "tech_slug": None,
     },
+    {
+        "slug": "ai_eval_ready",
+        "name": "Sharp Reviewer",
+        "description": "Complete 3 AI Code Eval Lab practice scenarios.",
+        "icon": "scale",
+        "bonus_xp": 45,
+        "tech_slug": "debugging",
+    },
 ]
 
 ACHIEVEMENT_BY_SLUG: dict[str, dict[str, Any]] = {a["slug"]: a for a in ACHIEVEMENTS}
@@ -223,6 +231,10 @@ def _check_conditions(conn: sqlite3.Connection) -> dict[str, bool]:
         ).fetchone()["c"]
     )
 
+    eval_scenarios_count = int(
+        conn.execute("SELECT COUNT(DISTINCT scenario_id) AS c FROM eval_submissions").fetchone()["c"]
+    )
+
     return {
         "first_quest": completions_count >= 1,
         "vim_par_sniper": par_count >= 1,
@@ -236,6 +248,7 @@ def _check_conditions(conn: sqlite3.Connection) -> dict[str, bool]:
         "interview_ready": interview_ready_count >= 1,
         "daily_goal_crusher": daily_xp_target > 0 and today_xp >= daily_xp_target,
         "level_5_hero": level >= 5,
+        "ai_eval_ready": eval_scenarios_count >= 3,
     }
 
 

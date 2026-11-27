@@ -459,3 +459,84 @@ export interface ParseResumeResp {
   char_count: number;
   preview: string;
 }
+
+export type EvalChoice = "strongly_a" | "slightly_a" | "tie" | "slightly_b" | "strongly_b";
+
+export interface EvalApproach {
+  label: string;
+  summary: string;
+  code: string;
+  test_output: string;
+}
+
+export interface EvalScenario {
+  id: string;
+  title: string;
+  language: string;
+  difficulty: string;
+  estimated_minutes: number;
+  context: string;
+  task_prompt: string;
+  acceptance_criteria: string[];
+  approach_a: EvalApproach;
+  approach_b: EvalApproach;
+  available_tags: { slug: string; label: string }[];
+  completed?: boolean;
+  best_score?: number;
+  last_submission?: Record<string, any> | null;
+}
+
+export interface EvalRubric {
+  stance_clarity: number;
+  code_evidence: number;
+  verification_focus: number;
+  actionable_steering: number;
+  total: number;
+}
+
+export interface EvalSubmitReq {
+  choice: EvalChoice;
+  spotted_tags: string[];
+  rationale: string;
+  followup_prompt: string;
+}
+
+export interface EvalDryRun {
+  id: string;
+  repo_name: string;
+  license: string;
+  task_type: string;
+  goal: string;
+  acceptance_criteria: string[];
+  verify_command: string;
+  what_helped: string;
+  where_stepped_in: string;
+  preferred_approach_notes: string;
+  checklist: Record<string, boolean>;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvalLabOverview {
+  scenarios: EvalScenario[];
+  dry_runs: EvalDryRun[];
+  completed_count: number;
+  total_scenarios: number;
+  confidence_pct: number;
+  ladder: { id: string; title: string; done: boolean }[];
+}
+
+export interface EvalSubmitResp {
+  aligned: boolean;
+  expected_side: "a" | "b";
+  matched_tags: string[];
+  missed_tags: string[];
+  rubric: EvalRubric;
+  coaching_tips: string[];
+  reference_explanation: string;
+  sample_followup: string;
+  xp_awarded: number;
+  unlocked_achievements?: UnlockedAchievement[];
+  overview: EvalLabOverview;
+}

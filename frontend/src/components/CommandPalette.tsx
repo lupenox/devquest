@@ -7,6 +7,7 @@ import {
   GitBranch,
   Palette,
   RefreshCw,
+  Scale,
   Search,
   Sparkles,
   Swords,
@@ -129,6 +130,15 @@ export function CommandPalette({
         badge: "Sprint",
         keywords: "start 2 min quick sprint warmup",
         run: () => onNavigateTab("sprint", 2),
+      },
+      {
+        id: "action-eval-lab",
+        group: "Quick Actions",
+        title: "AI Code Eval Lab (A/B Review & Dry Runs)",
+        subtitle: "Practice A/B code critiques, catch reward hacking & run dry-run plans",
+        badge: "Eval Lab",
+        keywords: "ai code eval lab ab review diff critique rubric dry run sandbox",
+        run: () => onNavigateTab("eval-lab"),
       },
       {
         id: "action-campaigns",
@@ -274,7 +284,7 @@ export function CommandPalette({
       pushTechs();
       out.push(...matchingActions);
     } else {
-      out.push(...matchingActions.slice(0, 7));
+      out.push(...matchingActions.slice(0, 8));
       pushModulesAndPacks();
       pushTechs();
     }
@@ -326,6 +336,7 @@ export function CommandPalette({
     if (item.group === "Activities") return <Code2 size={15} color="var(--green)" />;
     if (item.id.includes("sprint")) return <Zap size={15} color="var(--amber)" />;
     if (item.id.includes("theme")) return <Palette size={15} color="var(--accent-2)" />;
+    if (item.id.includes("eval-lab")) return <Scale size={15} color="var(--accent)" />;
     if (item.id.includes("campaigns")) return <Calendar size={15} color="var(--accent)" />;
     if (item.id.includes("repos")) return <FolderGit2 size={15} color="var(--cyan)" />;
     if (item.id.includes("sync")) return <RefreshCw size={15} color="var(--green)" />;

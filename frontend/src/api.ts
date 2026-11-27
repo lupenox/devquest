@@ -4,6 +4,10 @@ import type {
   CampaignItem,
   CreateCampaignReq,
   DashboardData,
+  EvalDryRun,
+  EvalLabOverview,
+  EvalSubmitReq,
+  EvalSubmitResp,
   GitHubRepo,
   GitHubStatus,
   GradeOutcome,
@@ -147,6 +151,27 @@ export const api = {
     ),
   deleteCampaign: (campaignId: string) =>
     req<{ deleted: string }>(`/api/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: "DELETE",
+    }),
+  evalLab: () => req<EvalLabOverview>("/api/eval-lab"),
+  submitEvalScenario: (scenarioId: string, payload: EvalSubmitReq) =>
+    req<EvalSubmitResp>(`/api/eval-lab/scenarios/${encodeURIComponent(scenarioId)}/submit`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  evalDryRuns: () => req<{ dry_runs: EvalDryRun[] }>("/api/eval-lab/dry-runs"),
+  createEvalDryRun: (payload: Partial<EvalDryRun>) =>
+    req<EvalDryRun>("/api/eval-lab/dry-runs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateEvalDryRun: (id: string, payload: Partial<EvalDryRun>) =>
+    req<EvalDryRun>(`/api/eval-lab/dry-runs/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteEvalDryRun: (id: string) =>
+    req<{ deleted: string }>(`/api/eval-lab/dry-runs/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
   saveProfile: (provider: string, handle: string) =>

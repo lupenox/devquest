@@ -13,6 +13,14 @@ from pydantic import BaseModel, Field
 from . import config
 from .achievements import evaluate_achievements
 from .db import award_xp, get_conn, get_dashboard_data, init_db
+from .eval_lab import (
+    create_dry_run,
+    delete_dry_run,
+    get_eval_lab_overview,
+    list_dry_runs,
+    submit_eval_scenario,
+    update_dry_run,
+)
 from .github_study import (
     create_repo_interview_pack,
     get_github_status,
@@ -200,6 +208,42 @@ class CampaignPracticeReq(BaseModel):
 
 class CampaignMockReq(BaseModel):
     model: str | None = None
+
+
+class EvalSubmitReq(BaseModel):
+    choice: str
+    spotted_tags: list[str] = Field(default_factory=list)
+    rationale: str = ""
+    followup_prompt: str = ""
+
+
+class EvalDryRunCreateReq(BaseModel):
+    id: str | None = None
+    repo_name: str
+    license: str = "MIT"
+    task_type: str = "Bug Fix"
+    goal: str
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    verify_command: str = ""
+    what_helped: str = ""
+    where_stepped_in: str = ""
+    preferred_approach_notes: str = ""
+    checklist: dict[str, bool] = Field(default_factory=dict)
+    status: str = "in_progress"
+
+
+class EvalDryRunUpdateReq(BaseModel):
+    repo_name: str | None = None
+    license: str | None = None
+    task_type: str | None = None
+    goal: str | None = None
+    acceptance_criteria: list[str] | None = None
+    verify_command: str | None = None
+    what_helped: str | None = None
+    where_stepped_in: str | None = None
+    preferred_approach_notes: str | None = None
+    checklist: dict[str, bool] | None = None
+    status: str | None = None
 
 
 async def _broadcast_achievements(unlocked: list[dict[str, Any]]) -> None:
@@ -1188,6 +1232,70 @@ async def api_delete_campaign(campaign_id: str):
             raise HTTPException(status_code=404, detail=str(exc))
     await hub.broadcast("campaign_updated", {"campaign_id": campaign_id, "deleted": True})
     return res
+
+
+@app.get("/api/eval-lab")
+def api_eval_lab_overview():
+    with get_conn() as conn:
+        return get_eval_lab_overview(conn)
+
+
+@app.post("/api/eval-lab/scenarios/{scenario_id}/submit")
+async def api_submit_eval_scenario(scenario_id: str, req: EvalSubmitReq):
+    with get_conn() as conn:
+        try:
+            res = submit_eval_scenario(
+                conn,
+                scenario_id=scenario_id,
+                choice=req.choice,
+                spotted_tags=req.spotted_tags,
+                rationale=req.rationale,
+                followup_prompt=req.followup_prompt,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    ws_grade_event = res.pop("_ws_grade_event", None)
+    if ws_grade_event:
+        await hub.broadcast("activity_graded", ws_grade_event)
+    await _broadcast_achievements(res.get("unlocked_achievements", []))
+    return res
+
+
+@app.get("/api/eval-lab/dry-runs")
+def api_list_eval_dry_runs():
+    with get_conn() as conn:
+        return {"dry_runs": list_dry_runs(conn)}
+
+
+@app.post("/api/eval-lab/dry-runs")
+def api_create_eval_dry_run(req: EvalDryRunCreateReq):
+    with get_conn() as conn:
+        try:
+            return create_dry_run(conn, req.model_dump())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.put("/api/eval-lab/dry-runs/{run_id}")
+def api_update_eval_dry_run(run_id: str, req: EvalDryRunUpdateReq):
+    with get_conn() as conn:
+        try:
+            return update_dry_run(conn, run_id, req.model_dump(exclude_unset=True))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/eval-lab/dry-runs/{run_id}")
+def api_delete_eval_dry_run(run_id: str):
+    with get_conn() as conn:
+        try:
+            return delete_dry_run(conn, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
 
 
 def _serve_spa_or_static(full_path: str) -> FileResponse:

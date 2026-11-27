@@ -60,24 +60,25 @@
 .app-shell.dashboard-shell .nav-tabs {
   display: flex;
   align-items: center;
-  gap: .25rem;
+  gap: .15rem;
   margin-bottom: 1rem;
-  padding: .3rem .6rem;
+  padding: .3rem .45rem;
   border-top: 0;
   border-radius: 0 0 14px 14px;
 }
 
 .app-shell.dashboard-shell .nav-btn {
   justify-content: center;
-  gap: .4rem;
-  padding: .5rem .8rem;
+  gap: .3rem;
+  padding: .45rem .55rem;
   border: 0;
   border-radius: .4rem;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: .84rem;
+  font-size: .8rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .app-shell.dashboard-shell .nav-btn:hover,
@@ -94,7 +95,7 @@
   .app-shell.dashboard-shell .nav-tabs { gap: .15rem; }
 
   .app-shell.dashboard-shell .nav-btn {
-    padding-inline: .65rem;
+    padding-inline: .45rem;
     min-height: 2.5rem;
   }
 }

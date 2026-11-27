@@ -650,6 +650,8 @@ def test_non_destructive_v1_schema_migration(tmp_path: Path, monkeypatch: pytest
             "mock_interviews",
             "interview_campaigns",
             "campaign_items",
+            "eval_submissions",
+            "eval_dry_runs",
         }.issubset(tables)
 
         py_row = migrated.execute("SELECT xp FROM technologies WHERE slug = 'python'").fetchone()
@@ -669,7 +671,7 @@ def test_non_destructive_v1_schema_migration(tmp_path: Path, monkeypatch: pytest
     assert dash["total_xp"] == 145
     assert dash["daily_xp_target"] == 250
     assert isinstance(dash["rank_title"], str) and len(dash["rank_title"]) > 0
-    assert len(dash["achievements"]) == 12
+    assert len(dash["achievements"]) == 13
     assert len(dash["daily_warmup"]) == 3
     for item in dash["daily_warmup"]:
         assert {"activity_id", "title", "tech_slug", "module_id", "activity_type", "xp_reward", "reason"}.issubset(
@@ -721,7 +723,7 @@ def test_achievements_unlock_and_idempotency(isolated_env):
     from app.db import award_xp
     from app.rpg import utcnow
 
-    assert len(ACHIEVEMENTS) == 12
+    assert len(ACHIEVEMENTS) == 13
     client = TestClient(app)
 
     # Completing first activity unlocks first_quest via HTTP submit
@@ -807,6 +809,14 @@ def test_achievements_unlock_and_idempotency(isolated_env):
             """,
             (now.isoformat(), now.isoformat()),
         )
+        for sid in ("eval-py-async-timer", "eval-fastapi-rate-limit", "eval-py-test-cheat"):
+            conn.execute(
+                """
+                INSERT INTO eval_submissions (scenario_id, choice, spotted_tags_json, rationale, followup_prompt, aligned, rubric_score, feedback_json, created_at)
+                VALUES (?, 'strongly_b', '[]', 'grounded review', 'add test', 1, 88, '{}', ?)
+                """,
+                (sid, now.isoformat()),
+            )
 
         newly = evaluate_achievements(conn)
         newly_slugs = {a["slug"] for a in newly}
@@ -818,6 +828,7 @@ def test_achievements_unlock_and_idempotency(isolated_env):
             "github_connected",
             "interview_ready",
             "level_5_hero",
+            "ai_eval_ready",
         }.issubset(newly_slugs)
         if boss_act:
             assert "boss_slayer" in newly_slugs
@@ -830,7 +841,7 @@ def test_achievements_unlock_and_idempotency(isolated_env):
         assert xp_after == xp_before
 
     dash = client.get("/api/dashboard").json()
-    assert len(dash["achievements"]) == 12
+    assert len(dash["achievements"]) == 13
     assert all(a["unlocked"] is True and a["unlocked_at"] is not None for a in dash["achievements"])
     assert dash["level"] >= 5
     assert dash["rank_title"] in {
@@ -1413,6 +1424,181 @@ def test_interview_campaign_pdf_schedule_practice_and_mock(isolated_env, monkeyp
     assert client.delete("/api/campaigns/acme-custom-seed").json() == {"deleted": "acme-custom-seed"}
     assert client.get(f"/api/campaigns/{cid}").status_code == 404
     assert client.get("/api/dashboard").json()["upcoming_campaign"] is None
+
+
+def test_ai_eval_lab_scenarios_rubric_achievement_and_dry_runs(isolated_env):
+    client = TestClient(app)
+
+    # 1. Load overview: all 6 scenarios present, 0 completed, 4-step confidence ladder
+    ov0 = client.get("/api/eval-lab")
+    assert ov0.status_code == 200
+    body0 = ov0.json()
+    assert body0["total_scenarios"] == 6
+    assert body0["completed_count"] == 0
+    assert body0["confidence_pct"] == 0
+    assert len(body0["ladder"]) == 4
+    assert all(step["done"] is False for step in body0["ladder"])
+    scenario_ids = [s["id"] for s in body0["scenarios"]]
+    assert scenario_ids == [
+        "eval-py-async-timer",
+        "eval-fastapi-rate-limit",
+        "eval-py-test-cheat",
+        "eval-react-silent-reload",
+        "eval-sql-window-topn",
+        "eval-bash-strict-refactor",
+    ]
+    for s in body0["scenarios"]:
+        assert {"label", "summary", "code", "test_output"}.issubset(s["approach_a"].keys())
+        assert {"label", "summary", "code", "test_output"}.issubset(s["approach_b"].keys())
+        assert len(s["available_tags"]) >= 4
+
+    # 2. Submit calibrated review on reward-hacking TTL cache scenario
+    s1_resp = client.post(
+        "/api/eval-lab/scenarios/eval-py-test-cheat/submit",
+        json={
+            "choice": "strongly_b",
+            "spotted_tags": ["weakened_test", "clean_tests", "idiomatic_fix"],
+            "rationale": (
+                "Strongly prefer Approach B because Approach A weakened the assertion in `test_cache.py` "
+                "to `in (None, 'v')` without fixing `get()`. Approach B uses an injectable `time.monotonic` "
+                "clock, checks `expires_at`, pops expired keys to evict them, and keeps strict pytest assertions."
+            ),
+            "followup_prompt": (
+                "Keep Approach B's monotonic clock and strict assertions, and please add an edge-case pytest "
+                "verifying `ttl <= 0` expires immediately."
+            ),
+        },
+    )
+    assert s1_resp.status_code == 200
+    s1 = s1_resp.json()
+    assert s1["aligned"] is True
+    assert s1["expected_side"] == "b"
+    assert set(s1["matched_tags"]) == {"weakened_test", "clean_tests", "idiomatic_fix"}
+    assert s1["missed_tags"] == []
+    assert s1["xp_awarded"] == 35
+    rub = s1["rubric"]
+    assert rub["stance_clarity"] >= 20
+    assert rub["code_evidence"] >= 20
+    assert rub["verification_focus"] >= 20
+    assert rub["actionable_steering"] >= 20
+    assert rub["total"] == (
+        rub["stance_clarity"] + rub["code_evidence"] + rub["verification_focus"] + rub["actionable_steering"]
+    )
+    assert s1["overview"]["completed_count"] == 1
+    assert s1["overview"]["confidence_pct"] > 0
+    assert s1["overview"]["ladder"][0]["done"] is True
+    assert s1["overview"]["ladder"][1]["done"] is False
+
+    # Re-calibrating same scenario awards +10 XP and catches misaligned stance
+    s1_re = client.post(
+        "/api/eval-lab/scenarios/eval-py-test-cheat/submit",
+        json={
+            "choice": "strongly_a",
+            "spotted_tags": [],
+            "rationale": "Approach A passed pytest.",
+            "followup_prompt": "",
+        },
+    ).json()
+    assert s1_re["aligned"] is False
+    assert s1_re["xp_awarded"] == 10
+    assert len(s1_re["missed_tags"]) == 3
+    assert len(s1_re["coaching_tips"]) >= 1
+
+    # Validation errors
+    assert client.post("/api/eval-lab/scenarios/unknown-id/submit", json={"choice": "strongly_a"}).status_code == 404
+    assert client.post("/api/eval-lab/scenarios/eval-py-test-cheat/submit", json={"choice": "bad_choice"}).status_code == 400
+
+    # 3. Complete 2 more distinct scenarios -> unlocks ai_eval_ready ("Sharp Reviewer") on 3rd distinct scenario
+    s2 = client.post(
+        "/api/eval-lab/scenarios/eval-react-silent-reload/submit",
+        json={
+            "choice": "strongly_a",
+            "spotted_tags": ["idiomatic_fix", "clean_tests", "stale_closure"],
+            "rationale": (
+                "Approach A adds a `silent` refresh flag so `setLoading` does not unmount `<DraftEditor />` "
+                "and adds a Vitest regression test, whereas Approach B resets `draftRef` inside `useEffect`."
+            ),
+            "followup_prompt": "Keep Approach A and add a non-blocking error banner if silent refresh fails.",
+        },
+    ).json()
+    assert s2["aligned"] is True and s2["expected_side"] == "a"
+    assert "ai_eval_ready" not in {a["slug"] for a in s2["unlocked_achievements"]}
+
+    s3 = client.post(
+        "/api/eval-lab/scenarios/eval-bash-strict-refactor/submit",
+        json={
+            "choice": "strongly_a",
+            "spotted_tags": ["unsafe_shell", "missed_edge_case", "idiomatic_fix"],
+            "rationale": (
+                "Approach A keeps `set -euo pipefail`, double-quotes `\"$file\"` for paths with spaces, "
+                "and uses `grep -c` with `|| true`. Approach B drops strict mode and adds unsafe `eval`."
+            ),
+            "followup_prompt": "Approve Approach A and add `--` before the pattern in `grep -c`.",
+        },
+    ).json()
+    assert s3["aligned"] is True and s3["expected_side"] == "a"
+    assert s3["overview"]["completed_count"] == 3
+    assert s3["overview"]["ladder"][1]["done"] is True
+    assert "ai_eval_ready" in {a["slug"] for a in s3["unlocked_achievements"]}
+
+    # 4. Dry-Run Workbench CRUD + confidence ladder completion
+    create_dr = client.post(
+        "/api/eval-lab/dry-runs",
+        json={
+            "repo_name": "acme/cli-toolkit",
+            "license": "MIT",
+            "task_type": "Bug Fix",
+            "goal": "Fix argument parser handling empty stdin gracefully",
+            "acceptance_criteria": [
+                "Exit 0 with empty JSON array on empty stdin",
+                "Preserve existing flag behavior",
+                "Add pytest regression test",
+            ],
+            "verify_command": "uv run pytest -v",
+        },
+    )
+    assert create_dr.status_code == 200
+    dr = create_dr.json()
+    run_id = dr["id"]
+    assert dr["repo_name"] == "acme/cli-toolkit"
+    assert dr["status"] == "in_progress"
+    assert len(dr["acceptance_criteria"]) == 3
+
+    listed = client.get("/api/eval-lab/dry-runs").json()["dry_runs"]
+    assert len(listed) == 1 and listed[0]["id"] == run_id
+
+    upd = client.put(
+        f"/api/eval-lab/dry-runs/{run_id}",
+        json={
+            "what_helped": "Assistant drafted the initial CLI fixture test quickly.",
+            "where_stepped_in": "Caught missing EOF check and strengthened assertion.",
+            "preferred_approach_notes": "Preferred explicit EOF guard over broad try/except.",
+            "checklist": {
+                "eligible_license": True,
+                "no_secrets": True,
+                "no_pii": True,
+                "ran_tests_reviewed_diff": True,
+                "own_words_feedback": True,
+            },
+        },
+    )
+    assert upd.status_code == 200
+    dr_upd = upd.json()
+    assert dr_upd["status"] == "completed"
+    assert dr_upd["checklist"]["own_words_feedback"] is True
+
+    # Overview now reflects dry-run progress & higher confidence %
+    ov_after = client.get("/api/eval-lab").json()
+    assert len(ov_after["dry_runs"]) == 1
+    assert ov_after["ladder"][2]["done"] is True
+    assert ov_after["confidence_pct"] >= 65
+
+    # Delete dry-run + 404 checks
+    assert client.delete(f"/api/eval-lab/dry-runs/{run_id}").json() == {"deleted": run_id}
+    assert client.put(f"/api/eval-lab/dry-runs/{run_id}", json={"goal": "updated"}).status_code == 404
+    assert client.delete(f"/api/eval-lab/dry-runs/{run_id}").status_code == 404
+    assert client.post("/api/eval-lab/dry-runs", json={"repo_name": "", "goal": "x"}).status_code == 400
+
 
 
 

@@ -162,6 +162,36 @@ CREATE TABLE IF NOT EXISTS campaign_items (
     order_index INTEGER NOT NULL DEFAULT 0,
     notes TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS eval_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scenario_id TEXT NOT NULL,
+    choice TEXT NOT NULL,
+    spotted_tags_json TEXT NOT NULL DEFAULT '[]',
+    rationale TEXT NOT NULL DEFAULT '',
+    followup_prompt TEXT NOT NULL DEFAULT '',
+    aligned INTEGER NOT NULL DEFAULT 0,
+    rubric_score INTEGER NOT NULL DEFAULT 0,
+    feedback_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eval_dry_runs (
+    id TEXT PRIMARY KEY,
+    repo_name TEXT NOT NULL,
+    license TEXT NOT NULL DEFAULT 'MIT',
+    task_type TEXT NOT NULL DEFAULT 'Bug Fix',
+    goal TEXT NOT NULL,
+    acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
+    verify_command TEXT NOT NULL DEFAULT '',
+    what_helped TEXT NOT NULL DEFAULT '',
+    where_stepped_in TEXT NOT NULL DEFAULT '',
+    preferred_approach_notes TEXT NOT NULL DEFAULT '',
+    checklist_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'in_progress',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

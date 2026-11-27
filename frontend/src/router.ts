@@ -2,6 +2,7 @@ export type NavTab =
   | "dashboard"
   | "tracks"
   | "repos"
+  | "eval-lab"
   | "tree"
   | "projects"
   | "sprint"
@@ -39,6 +40,10 @@ export function parseLocation(pathname: string, search = ""): AppRoute {
 
   if (head === "repos") {
     return { tab: "repos", techSlug: null, moduleId: null };
+  }
+
+  if (head === "eval-lab") {
+    return { tab: "eval-lab", techSlug: null, moduleId: null };
   }
 
   if (head === "tree") {
@@ -79,6 +84,8 @@ export function routeToPath(route: AppRoute): string {
       return route.techSlug ? `/tracks/${encodeURIComponent(route.techSlug)}` : "/tracks";
     case "repos":
       return "/repos";
+    case "eval-lab":
+      return "/eval-lab";
     case "tree":
       return "/tree";
     case "projects":

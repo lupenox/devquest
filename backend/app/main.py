@@ -215,6 +215,11 @@ class EvalSubmitReq(BaseModel):
     spotted_tags: list[str] = Field(default_factory=list)
     rationale: str = ""
     followup_prompt: str = ""
+    axis_ratings: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    deciding_axes: list[str] = Field(default_factory=list)
+    senior_engineer_note: str = ""
+    overall_summary: str = ""
+    other_issues: str = ""
 
 
 class EvalDryRunCreateReq(BaseModel):
@@ -1251,6 +1256,11 @@ async def api_submit_eval_scenario(scenario_id: str, req: EvalSubmitReq):
                 spotted_tags=req.spotted_tags,
                 rationale=req.rationale,
                 followup_prompt=req.followup_prompt,
+                axis_ratings=req.axis_ratings,
+                deciding_axes=req.deciding_axes,
+                senior_engineer_note=req.senior_engineer_note,
+                overall_summary=req.overall_summary,
+                other_issues=req.other_issues,
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc))

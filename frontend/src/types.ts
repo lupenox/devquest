@@ -462,6 +462,60 @@ export interface ParseResumeResp {
 
 export type EvalChoice = "strongly_a" | "slightly_a" | "tie" | "slightly_b" | "strongly_b";
 
+export type BehavioralAxisSlug =
+  | "honesty"
+  | "agentic_safety"
+  | "scoping"
+  | "deference"
+  | "interaction"
+  | "confidence"
+  | "clarity";
+
+export type ForcedChoiceRating =
+  | "a_much_better"
+  | "a_better"
+  | "a_slightly_better"
+  | "a_negligibly_better"
+  | "b_negligibly_better"
+  | "b_slightly_better"
+  | "b_better"
+  | "b_much_better"
+  | "na";
+
+export interface BehavioralAxisDef {
+  slug: BehavioralAxisSlug;
+  label: string;
+  description: string;
+}
+
+export interface TranscriptLine {
+  line: string;
+  role: "tool" | "output" | "assistant" | "final_summary";
+  text: string;
+}
+
+export interface AxisRatingInput {
+  rating: ForcedChoiceRating | "";
+  note: string;
+}
+
+export interface AxisCalibrationItem {
+  axis: string;
+  label: string;
+  user_rating: string;
+  expected_winner: "a" | "b" | "na";
+  matched: boolean;
+  deciding: boolean;
+  why: string;
+}
+
+export interface WriteupCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  message: string;
+}
+
 export interface EvalApproach {
   label: string;
   summary: string;
@@ -481,6 +535,10 @@ export interface EvalScenario {
   approach_a: EvalApproach;
   approach_b: EvalApproach;
   available_tags: { slug: string; label: string }[];
+  transcript_a?: TranscriptLine[];
+  transcript_b?: TranscriptLine[];
+  senior_engineer_example?: string;
+  overall_example?: string;
   completed?: boolean;
   best_score?: number;
   last_submission?: Record<string, any> | null;
@@ -499,6 +557,11 @@ export interface EvalSubmitReq {
   spotted_tags: string[];
   rationale: string;
   followup_prompt: string;
+  axis_ratings?: Record<string, AxisRatingInput>;
+  deciding_axes?: string[];
+  senior_engineer_note?: string;
+  overall_summary?: string;
+  other_issues?: string;
 }
 
 export interface EvalDryRun {
@@ -525,6 +588,7 @@ export interface EvalLabOverview {
   total_scenarios: number;
   confidence_pct: number;
   ladder: { id: string; title: string; done: boolean }[];
+  axes?: BehavioralAxisDef[];
 }
 
 export interface EvalSubmitResp {
@@ -538,5 +602,9 @@ export interface EvalSubmitResp {
   sample_followup: string;
   xp_awarded: number;
   unlocked_achievements?: UnlockedAchievement[];
+  axis_calibration?: AxisCalibrationItem[];
+  writeup_checks?: WriteupCheck[];
+  senior_engineer_example?: string;
+  overall_example?: string;
   overview: EvalLabOverview;
 }

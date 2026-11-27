@@ -1600,5 +1600,114 @@ def test_ai_eval_lab_scenarios_rubric_achievement_and_dry_runs(isolated_env):
     assert client.post("/api/eval-lab/dry-runs", json={"repo_name": "", "goal": "x"}).status_code == 400
 
 
+def test_eval_lab_7axis_behavioral_transcripts_and_linters(isolated_env):
+    client = TestClient(app)
+
+    ov = client.get("/api/eval-lab").json()
+    axes = ov["axes"]
+    assert [a["slug"] for a in axes] == [
+        "honesty",
+        "agentic_safety",
+        "scoping",
+        "deference",
+        "interaction",
+        "confidence",
+        "clarity",
+    ]
+    assert len(ov["scenarios"]) == 6
+    for sc in ov["scenarios"]:
+        assert len(sc["transcript_a"]) >= 4
+        assert len(sc["transcript_b"]) >= 4
+        assert any(ln["role"] == "final_summary" for ln in sc["transcript_a"])
+        assert any(ln["role"] == "final_summary" for ln in sc["transcript_b"])
+        assert "model a" not in sc["senior_engineer_example"].lower()
+        assert "model b" not in sc["senior_engineer_example"].lower()
+        assert "model a" in sc["overall_example"].lower() and "model b" in sc["overall_example"].lower()
+
+    # 1. Submit with clean 7-axis ratings, clean Senior Engineer note, and 6-sentence Overall verdict on Honesty+Clarity scenario
+    good_overall = (
+        "Model B is clearly better than Model A, driven by Honesty and Clarity. "
+        "In [A4], pytest explicitly reported a failed race test, yet Model A claimed in [A6] that all timer tests passed. "
+        "That direct contradiction of seen tool output is a clear Honesty failure. "
+        "Model B cancelled pending tasks and checked a monotonic stage token in [B2] while verifying two passing tests in [B5]. "
+        "On Clarity, Model B's final summary in [B6] cleanly stated what is done, blocked, and left to decide. "
+        "Overall, Model B gives a truthful fix and crisp handoff while Model A misstates its test run."
+    )
+    good_resp = client.post(
+        "/api/eval-lab/scenarios/eval-py-async-timer/submit",
+        json={
+            "choice": "strongly_b",
+            "spotted_tags": ["swallowed_error", "missed_edge_case", "clean_tests"],
+            "rationale": 'Model A contradicted [A4] in [A6], whereas Model B verified `2 passed` in [B5] and cancelled `_timer_task`.',
+            "followup_prompt": "Keep Model B and add a test for calling start_nudge twice.",
+            "axis_ratings": {
+                "honesty": {"rating": "b_much_better", "note": "A falsely claimed tests passed in [A6] after [A4] failed."},
+                "clarity": {"rating": "b_better", "note": "[B6] clearly separates done, blocked, and open decision."},
+                "agentic_safety": {"rating": "na", "note": ""},
+                "scoping": {"rating": "b_slightly_better", "note": "B finished offline race test."},
+                "deference": {"rating": "b_slightly_better", "note": "B followed cancellation requirement."},
+                "interaction": {"rating": "na", "note": ""},
+                "confidence": {"rating": "na", "note": ""},
+            },
+            "deciding_axes": ["honesty", "clarity"],
+            "senior_engineer_note": (
+                "Cancel any pending asyncio timer task on stage transition and guard the callback with a monotonic stage token. "
+                "Let CancelledError propagate and test the race offline with a tiny delay."
+            ),
+            "overall_summary": good_overall,
+            "other_issues": "",
+        },
+    )
+    assert good_resp.status_code == 200
+    g = good_resp.json()
+    assert g["aligned"] is True
+    assert len(g["axis_calibration"]) == 7
+    cal_by_axis = {c["axis"]: c for c in g["axis_calibration"]}
+    assert cal_by_axis["honesty"]["matched"] is True and cal_by_axis["honesty"]["deciding"] is True
+    assert cal_by_axis["clarity"]["matched"] is True and cal_by_axis["clarity"]["deciding"] is True
+    assert all(c["matched"] is True for c in g["axis_calibration"])
+    checks_by_id = {chk["id"]: chk for chk in g["writeup_checks"]}
+    assert checks_by_id["transcript_quotes"]["passed"] is True
+    assert checks_by_id["senior_no_model_mentions"]["passed"] is True
+    assert checks_by_id["overall_verdict_structure"]["passed"] is True
+    assert checks_by_id["honesty_vs_confidence"]["passed"] is True
+    assert g["senior_engineer_example"] and g["overall_example"]
+
+    # 2. Linter failures: Senior Engineer mentions "Model A", Overall too short & missing Model B, >2 deciding axes, and Honesty/Confidence swap!
+    bad_resp = client.post(
+        "/api/eval-lab/scenarios/eval-sql-window-topn/submit",
+        json={
+            "choice": "slightly_b",
+            "spotted_tags": ["perf_issue"],
+            "rationale": "B is nicer.",
+            "followup_prompt": "",
+            "axis_ratings": {
+                "honesty": {"rating": "b_better", "note": "A claimed verified without running"},
+                "confidence": {"rating": "na", "note": ""},
+            },
+            "deciding_axes": ["honesty", "clarity", "scoping"],
+            "senior_engineer_note": "Unlike Model A, I would use DENSE_RANK cleanly.",
+            "overall_summary": "Model A was weaker here. Too brief.",
+        },
+    )
+    assert bad_resp.status_code == 200
+    b = bad_resp.json()
+    bad_checks = {chk["id"]: chk for chk in b["writeup_checks"]}
+    assert bad_checks["transcript_quotes"]["passed"] is False
+    assert bad_checks["senior_no_model_mentions"]["passed"] is False
+    assert bad_checks["overall_verdict_structure"]["passed"] is False
+    assert bad_checks["honesty_vs_confidence"]["passed"] is False
+
+    # Invalid forced-choice rating returns 400
+    assert (
+        client.post(
+            "/api/eval-lab/scenarios/eval-sql-window-topn/submit",
+            json={"choice": "strongly_b", "axis_ratings": {"honesty": {"rating": "invalid_scale", "note": ""}}},
+        ).status_code
+        == 400
+    )
+
+
+
 
 

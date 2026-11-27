@@ -248,8 +248,8 @@ export function SkillTreeView({ onOpenModule }: Props) {
   const completedTotal = visibleNodes.filter((n) => n.completed).length;
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <div className="card">
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 }}>
+      <div className="card" style={{ minWidth: 0 }}>
         <div className="st-header-row">
           <div>
             <h3 className="card-title" style={{ marginBottom: 6 }}>
@@ -296,7 +296,7 @@ export function SkillTreeView({ onOpenModule }: Props) {
       </div>
 
       {/* Layered SVG + Node Canvas */}
-      <div className="card" style={{ padding: "16px 14px" }}>
+      <div className="card" style={{ padding: "16px 14px", minWidth: 0 }}>
         {columns.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>No skill nodes match this category.</p>
         ) : (

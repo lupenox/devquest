@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Scale,
   Search,
-  Shield,
   Sparkles,
   Swords,
   Terminal,
@@ -358,13 +357,8 @@ export function App() {
     [loadDashboard, showToast, showAchievementToast]
   );
 
-  const levelPct = dashboard
-    ? Math.min(100, Math.round((dashboard.xp_in_level / Math.max(1, dashboard.xp_for_next)) * 100))
-    : 0;
-
   const activeTab = route.tab;
   const activeModuleId = route.moduleId;
-  const useCompactShell = !activeModuleId && (activeTab === "dashboard" || activeTab === "tracks");
   const rankTitle = dashboard ? dashboard.rank_title || fallbackRankTitle(dashboard.level) : null;
   const motionInfo = MOTION_META[motionMode];
   const viewStageKey = activeModuleId ? `mod:${activeModuleId}` : `${activeTab}:${route.techSlug || ""}`;
@@ -379,7 +373,7 @@ export function App() {
   return (
     <>
       <AmbientBackdrop theme={theme} motionMode={motionMode} celebrationTick={celebrationTick} />
-      <div className={useCompactShell ? "app-shell dashboard-shell" : "app-shell"}>
+      <div className="app-shell dashboard-shell">
       <header className="hud-header">
         <a
           className="brand-row brand-home"
@@ -391,20 +385,10 @@ export function App() {
             openTab("dashboard");
           }}
         >
-          <div className="brand-icon"><Terminal size={22} /></div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h1 className="brand-title">DevQuest</h1>
-              {!useCompactShell && rankTitle && (
-                <span className="rank-chip" data-testid="hud-rank">
-                  <Shield size={12} /> {rankTitle}
-                </span>
-              )}
-            </div>
-            {!useCompactShell && <p className="brand-sub">Neovim-First • zyBooks • AI Break Sprints • Boss Projects • $0/mo</p>}
-          </div>
+          <div className="brand-icon"><Terminal size={20} /></div>
+          <h1 className="brand-title">DevQuest</h1>
         </a>
-        {useCompactShell && connection}
+        {connection}
 
         <div className="hud-stats">
           <button
@@ -455,30 +439,6 @@ export function App() {
               <option value="kanagawa">Kanagawa Wave</option>
             </select>
           </label>
-
-          {dashboard && !useCompactShell && (
-            <>
-              <div className="hud-pill" data-testid="hud-level">
-                <span className="level-badge">Lv.{dashboard.level}</span>
-                <div>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700 }}>{dashboard.total_xp} XP</div>
-                  <div className="xp-mini-bar">
-                    <div className="xp-mini-fill" style={{ width: `${levelPct}%` }} />
-                  </div>
-                </div>
-              </div>
-              <div className="hud-pill" data-testid="hud-streak">
-                <Flame size={16} color="var(--red)" />
-                <strong>{dashboard.streak_days}d</strong>
-                <span className="muted">streak</span>
-              </div>
-              <div className="hud-pill hud-hide-sm">
-                <strong>{dashboard.completed_activities}/{dashboard.total_activities}</strong>
-                <span className="muted">mastered</span>
-              </div>
-            </>
-          )}
-          {!useCompactShell && connection}
         </div>
       </header>
 
@@ -494,10 +454,27 @@ export function App() {
               aria-current={active ? "page" : undefined}
               onClick={() => openTab(tab)}
             >
-              <Icon size={15} /> {useCompactShell ? compact : label}
+              <Icon size={15} /> {compact}
             </button>
           );
         })}
+
+        {dashboard && (
+          <div
+            className="nav-rpg-summary"
+            title={`${rankTitle || "DevQuest"} • ${dashboard.completed_activities}/${dashboard.total_activities} drills mastered`}
+          >
+            <span className="nav-rpg-level" data-testid="hud-level">
+              <span className="nav-level-tag">Lv.{dashboard.level}</span>
+              <span>{dashboard.total_xp} XP</span>
+            </span>
+            <span className="nav-rpg-sep" aria-hidden="true">·</span>
+            <span className="nav-rpg-streak" data-testid="hud-streak">
+              <Flame size={13} color="var(--red)" aria-hidden="true" />
+              {dashboard.streak_days}d
+            </span>
+          </div>
+        )}
       </nav>
 
       {error && (
@@ -556,26 +533,6 @@ export function App() {
         )}
         </div>
       </main>
-
-      {/* Mobile PWA Bottom Navigation Bar */}
-      {!useCompactShell && (
-        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-          {NAV_ITEMS.filter((item) => item.mobile).map(({ tab, mobile, Icon }) => {
-            const active = activeTab === tab && !activeModuleId;
-            return (
-              <button
-                key={tab}
-                type="button"
-                className={`mobile-nav-btn${active ? " active" : ""}`}
-                aria-current={active ? "page" : undefined}
-                onClick={() => openTab(tab)}
-              >
-                <Icon size={18} /><span>{mobile}</span>
-              </button>
-            );
-          })}
-        </nav>
-      )}
 
       <CommandPalette
         open={paletteOpen}

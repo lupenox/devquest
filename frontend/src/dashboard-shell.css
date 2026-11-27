@@ -91,6 +91,50 @@
   transform: none;
 }
 
+.nav-rpg-summary {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-rpg-level,
+.nav-rpg-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text);
+}
+
+.nav-level-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-contrast);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.nav-rpg-sep {
+  opacity: 0.45;
+}
+
+@media (max-width: 1080px) {
+  .nav-rpg-summary {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
   .app-shell.dashboard-shell { padding-bottom: 2rem; }
   .app-shell.dashboard-shell .nav-tabs { gap: .15rem; }

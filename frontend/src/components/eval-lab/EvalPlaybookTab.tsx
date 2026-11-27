@@ -20,25 +20,40 @@ import {
 
 interface EvalPlaybookTabProps {
   behavioralAxes: BehavioralAxisDef[];
+  completedCount?: number;
+  totalScenarios?: number;
+  nextScenarioNumber?: number;
+  nextScenarioMinutes?: number;
   onStartScenarioOne: () => void;
   onOpenDryRun: () => void;
 }
 
 export function EvalPlaybookTab({
   behavioralAxes,
+  completedCount = 0,
+  totalScenarios = 6,
+  nextScenarioNumber = 1,
+  nextScenarioMinutes = 5,
   onStartScenarioOne,
   onOpenDryRun,
 }: EvalPlaybookTabProps) {
+  const ctaLabel =
+    completedCount === 0
+      ? `Try Scenario 1 (${nextScenarioMinutes} min)`
+      : completedCount >= totalScenarios
+        ? "Review A/B Scenarios"
+        : `Continue Scenario ${nextScenarioNumber} (~${nextScenarioMinutes} min)`;
+
   return (
     <section className="eval-section-stack" data-testid="eval-playbook">
-      {/* 1. 60-Second Visual Orientation Flow */}
+      {/* 1. Calm Start Card — 1 Primary Action + Airy 3-Step Flow */}
       <div className="card eval-flow-card">
         <div className="eval-section-header">
           <div>
-            <h3 className="eval-section-title">What You&apos;ll Do Here (3 Calm Steps)</h3>
+            <h3 className="eval-section-title">Start in 3 Calm Steps</h3>
             <p className="eval-section-desc">
-              Think of AI code eval like structured PR review: inspect real transcripts, pick the
-              more trustworthy assistant, and calibrate before working live.
+              Think of AI code eval like structured PR review: read Model A vs B transcripts, pick
+              the more trustworthy agent, and check your call against a senior key.
             </p>
           </div>
           <div className="eval-flow-actions">
@@ -48,19 +63,19 @@ export function EvalPlaybookTab({
               data-testid="eval-start-scenario-1-btn"
               onClick={onStartScenarioOne}
             >
-              <span>Try Scenario 1 (5 min)</span>
+              <span>{ctaLabel}</span>
               <ArrowRight size={15} aria-hidden="true" />
             </button>
-            <button type="button" className="btn" onClick={onOpenDryRun}>
-              <Wrench size={15} aria-hidden="true" />
+            <button type="button" className="btn btn-ghost eval-quiet-action" onClick={onOpenDryRun}>
+              <Wrench size={14} aria-hidden="true" />
               <span>Prep My Repo</span>
             </button>
           </div>
         </div>
 
-        <ol className="eval-flow-grid">
+        <ol className="eval-flow-strip">
           {HOW_IT_WORKS_FLOW.map((item) => (
-            <li key={item.step} className="eval-flow-step">
+            <li key={item.step} className="eval-flow-beat">
               <span className="eval-flow-num" aria-hidden="true">
                 {item.step}
               </span>
@@ -73,37 +88,37 @@ export function EvalPlaybookTab({
         </ol>
       </div>
 
-      {/* 2. Scannable 7-Axis Quick Reference + 3 Golden Rules */}
+      {/* 2. Clean 7-Axis Scannable List + 3 Rules Footer */}
       <div className="card eval-cheatsheet-card" data-testid="eval-7axis-cheatsheet">
         <div className="eval-section-header">
           <div>
             <h3 className="eval-section-title">The 7 Behavioral Axes at a Glance</h3>
             <p className="eval-section-desc">
-              Focus on what the agent actually ran and claimed—not formatting aesthetics.
+              Grade what the agent actually ran and claimed — not formatting aesthetics.
             </p>
           </div>
         </div>
 
-        <div className="eval-axes-ref-grid compact">
+        <dl className="eval-axes-list">
           {behavioralAxes.map((axis, idx) => (
-            <article key={axis.slug} className="eval-axis-ref-card compact" title={axis.description}>
-              <div className="eval-axis-ref-head">
+            <div key={axis.slug} className="eval-axis-list-row" title={axis.description}>
+              <dt className="eval-axis-list-term">
                 <span className="eval-axis-ref-num">{idx + 1}</span>
-                <h4>{axis.label}</h4>
+                <span>{axis.label}</span>
                 {axis.slug === "clarity" && (
                   <span className="eval-clarity-pill">Final Summary Only</span>
                 )}
-              </div>
-              <p>
+              </dt>
+              <dd className="eval-axis-list-desc">
                 <RichText text={AXIS_SHORT_HINTS[axis.slug] || axis.description} />
-              </p>
-            </article>
+              </dd>
+            </div>
           ))}
-        </div>
+        </dl>
 
-        <div className="eval-rules-grid" data-testid="eval-golden-rules">
+        <div className="eval-rules-strip" data-testid="eval-golden-rules">
           {GOLDEN_RULES.map((rule) => (
-            <div key={rule.id} className="eval-rule-card">
+            <div key={rule.id} className="eval-rule-item">
               <div className="eval-rule-head">
                 <ShieldCheck size={14} aria-hidden="true" />
                 <strong>{rule.title}</strong>
@@ -131,7 +146,7 @@ export function EvalPlaybookTab({
         </div>
       </div>
 
-      {/* 4. On-Demand Reference Drawers (Zero Wall-of-Text Clutter) */}
+      {/* 4. On-Demand Reference Drawers (Collapsed Until Needed) */}
       <div className="card eval-reference-drawers" data-testid="eval-reference-drawers">
         <details className="eval-drawer" data-testid="eval-drawer-playbook">
           <summary className="eval-drawer-summary">

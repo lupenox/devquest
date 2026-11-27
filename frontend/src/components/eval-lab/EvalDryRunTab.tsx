@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Plus,
   ShieldCheck,
+  Sparkles,
   Terminal,
   Trash2,
   X,
@@ -19,6 +20,7 @@ import { RichText } from "../RichText";
 import {
   buildDryRunMarkdown,
   copyTextSafe,
+  DRY_RUN_SAMPLE_TEMPLATE,
   HYGIENE_ITEMS,
   LICENSE_OPTIONS,
   TASK_TYPE_OPTIONS,
@@ -28,7 +30,7 @@ interface EvalDryRunTabProps {
   dryRuns: EvalDryRun[];
   activeDryRunId: string;
   onSelectDryRunId: (id: string) => void;
-  onDryRunsChange: (runs: EvalDryRun[]) => void;
+  onDryRunsChange: React.Dispatch<React.SetStateAction<EvalDryRun[]>>;
   onRefresh: () => Promise<void>;
 }
 
@@ -39,6 +41,13 @@ function buildChecklistState(run: EvalDryRun | undefined): Record<string, boolea
     nextChecklist[item.key] = Boolean(run.checklist?.[item.key]);
   }
   return nextChecklist;
+}
+
+function runHasNotes(run: EvalDryRun | undefined): boolean {
+  if (!run) return false;
+  return Boolean(
+    run.what_helped?.trim() || run.where_stepped_in?.trim() || run.preferred_approach_notes?.trim()
+  );
 }
 
 export function EvalDryRunTab({
@@ -74,13 +83,33 @@ export function EvalDryRunTab({
   const [draftChecklist, setDraftChecklist] = useState<Record<string, boolean>>(() =>
     buildChecklistState(initialActive)
   );
+  const [notesOpen, setNotesOpen] = useState<boolean>(() => runHasNotes(initialActive));
   const [savingDryRun, setSavingDryRun] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
   const [copiedWriteup, setCopiedWriteup] = useState(false);
   const [copiedVerifyCmd, setCopiedVerifyCmd] = useState(false);
   const [showWriteupPreview, setShowWriteupPreview] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const syncedRunIdRef = useRef<string | undefined>(initialActive?.id);
+  const latestChecklistRef = useRef<Record<string, boolean>>(buildChecklistState(initialActive));
+  const lastConfirmedChecklistRef = useRef<Record<string, boolean>>(
+    buildChecklistState(initialActive)
+  );
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const inFlightSavesRef = useRef<number>(0);
+
+  const saveTimerRef = useRef<number | undefined>(undefined);
+  const copyWriteupTimerRef = useRef<number | undefined>(undefined);
+  const copyVerifyTimerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      if (copyWriteupTimerRef.current) window.clearTimeout(copyWriteupTimerRef.current);
+      if (copyVerifyTimerRef.current) window.clearTimeout(copyVerifyTimerRef.current);
+    };
+  }, []);
 
   const activeDryRun: EvalDryRun | undefined = useMemo(
     () => dryRuns.find((r) => r.id === activeDryRunId) || dryRuns[0],
@@ -100,17 +129,22 @@ export function EvalDryRunTab({
 
   const syncDryRunDraft = useCallback((run: EvalDryRun | undefined) => {
     syncedRunIdRef.current = run?.id;
+    const nextChecklist = buildChecklistState(run);
+    latestChecklistRef.current = nextChecklist;
+    lastConfirmedChecklistRef.current = nextChecklist;
     if (!run) {
       setDraftWhatHelped("");
       setDraftWhereSteppedIn("");
       setDraftPreferredNotes("");
       setDraftChecklist({});
+      setNotesOpen(false);
       return;
     }
     setDraftWhatHelped(run.what_helped || "");
     setDraftWhereSteppedIn(run.where_stepped_in || "");
     setDraftPreferredNotes(run.preferred_approach_notes || "");
-    setDraftChecklist(buildChecklistState(run));
+    setDraftChecklist(nextChecklist);
+    setNotesOpen(runHasNotes(run));
   }, []);
 
   useEffect(() => {
@@ -119,7 +153,20 @@ export function EvalDryRunTab({
     setSaveMessage(null);
     setDryRunError(null);
     setShowWriteupPreview(false);
+    setConfirmDeleteId(null);
   }, [activeDryRun, syncDryRunDraft]);
+
+  const fillSamplePlan = () => {
+    setNewRepoName(DRY_RUN_SAMPLE_TEMPLATE.repo_name);
+    setNewLicense(DRY_RUN_SAMPLE_TEMPLATE.license);
+    setNewTaskType(DRY_RUN_SAMPLE_TEMPLATE.task_type);
+    setNewGoal(DRY_RUN_SAMPLE_TEMPLATE.goal);
+    setNewAc1(DRY_RUN_SAMPLE_TEMPLATE.ac1);
+    setNewAc2(DRY_RUN_SAMPLE_TEMPLATE.ac2);
+    setNewAc3(DRY_RUN_SAMPLE_TEMPLATE.ac3);
+    setNewVerifyCmd(DRY_RUN_SAMPLE_TEMPLATE.verify_command);
+    setCreateError(null);
+  };
 
   const handleCreateDryRun = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,7 +204,7 @@ export function EvalDryRunTab({
       setNewAc3("");
       setNewVerifyCmd("");
       setShowCreateForm(false);
-      onDryRunsChange([created, ...dryRuns.filter((r) => r.id !== created.id)]);
+      onDryRunsChange((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       onSelectDryRunId(created.id);
       syncDryRunDraft(created);
       await onRefresh();
@@ -169,7 +216,7 @@ export function EvalDryRunTab({
   };
 
   const persistDryRun = useCallback(
-    async (
+    (
       run: EvalDryRun,
       overrides?: {
         what_helped?: string;
@@ -182,48 +229,69 @@ export function EvalDryRunTab({
       const nextWhatHelped = overrides?.what_helped ?? draftWhatHelped;
       const nextWhereSteppedIn = overrides?.where_stepped_in ?? draftWhereSteppedIn;
       const nextPreferredNotes = overrides?.preferred_approach_notes ?? draftPreferredNotes;
-      const nextChecklist = overrides?.checklist ?? draftChecklist;
+      const nextChecklist = overrides?.checklist ?? latestChecklistRef.current;
       const allChecked = HYGIENE_ITEMS.every((item) => Boolean(nextChecklist[item.key]));
       const nextStatus = allChecked ? "completed" : "in_progress";
+      const isChecklistUpdate = Boolean(overrides?.checklist);
 
+      inFlightSavesRef.current += 1;
       setSavingDryRun(true);
       setDryRunError(null);
-      try {
-        const updated = await api.updateEvalDryRun(run.id, {
-          repo_name: run.repo_name,
-          license: run.license,
-          task_type: run.task_type,
-          goal: run.goal,
-          acceptance_criteria: run.acceptance_criteria,
-          verify_command: run.verify_command,
-          what_helped: nextWhatHelped,
-          where_stepped_in: nextWhereSteppedIn,
-          preferred_approach_notes: nextPreferredNotes,
-          checklist: nextChecklist,
-          status: nextStatus,
-        });
-        onDryRunsChange(dryRuns.map((r) => (r.id === updated.id ? updated : r)));
-        if (showSavedToast) {
-          setSaveMessage(
-            allChecked
-              ? `Saved — all ${HYGIENE_ITEMS.length} pre-flight checks complete!`
-              : "Progress saved"
-          );
-          window.setTimeout(() => setSaveMessage(null), 2600);
+
+      const runTask = async () => {
+        try {
+          const updated = await api.updateEvalDryRun(run.id, {
+            repo_name: run.repo_name,
+            license: run.license,
+            task_type: run.task_type,
+            goal: run.goal,
+            acceptance_criteria: run.acceptance_criteria,
+            verify_command: run.verify_command,
+            what_helped: nextWhatHelped,
+            where_stepped_in: nextWhereSteppedIn,
+            preferred_approach_notes: nextPreferredNotes,
+            checklist: nextChecklist,
+            status: nextStatus,
+          });
+          if (syncedRunIdRef.current === updated.id) {
+            const confirmed = buildChecklistState(updated);
+            lastConfirmedChecklistRef.current = confirmed;
+            if (inFlightSavesRef.current === 1) {
+              latestChecklistRef.current = confirmed;
+              setDraftChecklist(confirmed);
+            }
+          }
+          onDryRunsChange((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+          if (showSavedToast) {
+            setSaveMessage(
+              allChecked
+                ? `Saved — all ${HYGIENE_ITEMS.length} pre-flight checks complete!`
+                : "Progress saved"
+            );
+            if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = window.setTimeout(() => setSaveMessage(null), 2600);
+          }
+          await onRefresh();
+        } catch (err: any) {
+          if (isChecklistUpdate && syncedRunIdRef.current === run.id && inFlightSavesRef.current === 1) {
+            const rollback = { ...lastConfirmedChecklistRef.current };
+            latestChecklistRef.current = rollback;
+            setDraftChecklist(rollback);
+          }
+          setDryRunError(err?.message || "Could not save dry-run progress.");
+        } finally {
+          inFlightSavesRef.current = Math.max(0, inFlightSavesRef.current - 1);
+          setSavingDryRun(inFlightSavesRef.current > 0);
         }
-        await onRefresh();
-      } catch (err: any) {
-        setDryRunError(err?.message || "Could not save dry-run progress.");
-      } finally {
-        setSavingDryRun(false);
-      }
+      };
+
+      saveQueueRef.current = saveQueueRef.current.then(runTask, runTask);
+      return saveQueueRef.current;
     },
     [
       draftWhatHelped,
       draftWhereSteppedIn,
       draftPreferredNotes,
-      draftChecklist,
-      dryRuns,
       onDryRunsChange,
       onRefresh,
     ]
@@ -232,19 +300,21 @@ export function EvalDryRunTab({
   const handleToggleChecklist = (key: string) => {
     if (!activeDryRun) return;
     const nextChecklist = {
-      ...draftChecklist,
-      [key]: !draftChecklist[key],
+      ...latestChecklistRef.current,
+      [key]: !latestChecklistRef.current[key],
     };
+    latestChecklistRef.current = nextChecklist;
     setDraftChecklist(nextChecklist);
     void persistDryRun(activeDryRun, { checklist: nextChecklist }, false);
   };
 
   const handleDeleteDryRun = async (runId: string) => {
     setDryRunError(null);
+    setConfirmDeleteId(null);
     try {
       await api.deleteEvalDryRun(runId);
       const remaining = dryRuns.filter((r) => r.id !== runId);
-      onDryRunsChange(remaining);
+      onDryRunsChange((prev) => prev.filter((r) => r.id !== runId));
       const nextActive = remaining[0];
       onSelectDryRunId(nextActive?.id || "");
       syncDryRunDraft(nextActive);
@@ -268,7 +338,8 @@ export function EvalDryRunTab({
     const ok = await copyTextSafe(md);
     if (ok) {
       setCopiedWriteup(true);
-      window.setTimeout(() => setCopiedWriteup(false), 2400);
+      if (copyWriteupTimerRef.current) window.clearTimeout(copyWriteupTimerRef.current);
+      copyWriteupTimerRef.current = window.setTimeout(() => setCopiedWriteup(false), 2400);
     } else {
       setShowWriteupPreview(true);
     }
@@ -279,11 +350,14 @@ export function EvalDryRunTab({
     const ok = await copyTextSafe(activeDryRun.verify_command);
     if (ok) {
       setCopiedVerifyCmd(true);
-      window.setTimeout(() => setCopiedVerifyCmd(false), 2000);
+      if (copyVerifyTimerRef.current) window.clearTimeout(copyVerifyTimerRef.current);
+      copyVerifyTimerRef.current = window.setTimeout(() => setCopiedVerifyCmd(false), 2000);
     }
   };
 
   const checkedHygieneCount = HYGIENE_ITEMS.filter((item) => Boolean(draftChecklist[item.key])).length;
+  const hygienePct = Math.round((checkedHygieneCount / HYGIENE_ITEMS.length) * 100);
+  const allHygienePassed = checkedHygieneCount === HYGIENE_ITEMS.length;
 
   const markdownPreview = useMemo(() => {
     if (!activeDryRun) return "";
@@ -308,33 +382,35 @@ export function EvalDryRunTab({
             organized before starting live.
           </p>
         </div>
-        <div className="eval-dryrun-top-actions">
-          {isCreating && dryRuns.length > 0 ? (
-            <button
-              type="button"
-              className="btn"
-              data-testid="eval-dryrun-new-toggle"
-              onClick={() => setShowCreateForm(false)}
-            >
-              <X size={15} aria-hidden="true" />
-              <span>Back to Active Plan</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-testid="eval-dryrun-new-toggle"
-              onClick={() => setShowCreateForm(true)}
-            >
-              <Plus size={15} aria-hidden="true" />
-              <span>New Dry-Run Plan</span>
-            </button>
-          )}
-        </div>
+        {dryRuns.length > 0 && (
+          <div className="eval-dryrun-top-actions">
+            {isCreating ? (
+              <button
+                type="button"
+                className="btn"
+                data-testid="eval-dryrun-new-toggle"
+                onClick={() => setShowCreateForm(false)}
+              >
+                <X size={15} aria-hidden="true" />
+                <span>Back to Active Plan</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="eval-dryrun-new-toggle"
+                onClick={() => setShowCreateForm(true)}
+              >
+                <Plus size={15} aria-hidden="true" />
+                <span>New Dry-Run Plan</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Saved Dry-Run Switcher */}
-      {dryRuns.length > 0 && !isCreating && (
+      {/* Saved Dry-Run Switcher (shown only when switching between multiple plans) */}
+      {dryRuns.length > 1 && !isCreating && (
         <div className="eval-dryrun-switcher" aria-label="Saved dry-run plans">
           {dryRuns.map((run) => {
             const isSelected = activeDryRun?.id === run.id;
@@ -364,125 +440,144 @@ export function EvalDryRunTab({
           data-testid="eval-dryrun-form"
           onSubmit={handleCreateDryRun}
         >
-          <div className="eval-dryrun-form-head">
-            <h4>Scope a New Repo Task</h4>
-            <p className="muted">
-              Define one bounded change in a public MIT / Apache-2.0 repo and how you&apos;ll verify
-              it locally.
-            </p>
+          <div className="eval-dryrun-form-head row">
+            <div>
+              <h4>Scope a New Repo Task</h4>
+              <p className="muted">
+                Define one bounded change in a public MIT / Apache-2.0 repo and how you&apos;ll
+                verify it locally.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-testid="eval-dryrun-fill-sample"
+              onClick={fillSamplePlan}
+            >
+              <Sparkles size={13} aria-hidden="true" />
+              <span>Fill Sample</span>
+            </button>
           </div>
 
-          <div className="eval-form-grid">
+          <div className="eval-dryrun-form-group">
+            <span className="eval-group-kicker">1. Repo &amp; Goal</span>
+            <div className="eval-form-grid">
+              <div className="eval-field-group">
+                <label htmlFor="dryrun-repo">Repo / Project Name</label>
+                <input
+                  id="dryrun-repo"
+                  type="text"
+                  className="input-field"
+                  value={newRepoName}
+                  onChange={(e) => setNewRepoName(e.target.value)}
+                  placeholder="e.g., my-oss-org/fast-cli"
+                />
+              </div>
+
+              <div className="eval-field-group">
+                <label htmlFor="dryrun-license">License</label>
+                <select
+                  id="dryrun-license"
+                  className="select-field"
+                  value={newLicense}
+                  onChange={(e) => setNewLicense(e.target.value)}
+                >
+                  {LICENSE_OPTIONS.map((lic) => (
+                    <option key={lic} value={lic}>
+                      {lic}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="eval-field-group">
+                <label htmlFor="dryrun-task-type">Task Type</label>
+                <select
+                  id="dryrun-task-type"
+                  className="select-field"
+                  value={newTaskType}
+                  onChange={(e) => setNewTaskType(e.target.value)}
+                >
+                  {TASK_TYPE_OPTIONS.map((tt) => (
+                    <option key={tt} value={tt}>
+                      {tt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div className="eval-field-group">
-              <label htmlFor="dryrun-repo">Repo / Project Name</label>
-              <input
-                id="dryrun-repo"
-                type="text"
-                className="input-field"
-                value={newRepoName}
-                onChange={(e) => setNewRepoName(e.target.value)}
-                placeholder="e.g., my-oss-org/fast-cli"
+              <label htmlFor="dryrun-goal">Task Goal</label>
+              <textarea
+                id="dryrun-goal"
+                className="eval-textarea"
+                rows={2}
+                value={newGoal}
+                onChange={(e) => setNewGoal(e.target.value)}
+                placeholder="Describe the bounded bug fix, feature, or refactor in 1–2 crisp sentences..."
               />
             </div>
+          </div>
 
+          <div className="eval-dryrun-form-group">
+            <span className="eval-group-kicker">2. How You&apos;ll Verify It (Optional)</span>
             <div className="eval-field-group">
-              <label htmlFor="dryrun-license">License</label>
-              <select
-                id="dryrun-license"
-                className="select-field"
-                value={newLicense}
-                onChange={(e) => setNewLicense(e.target.value)}
-              >
-                {LICENSE_OPTIONS.map((lic) => (
-                  <option key={lic} value={lic}>
-                    {lic}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="eval-field-group">
-              <label htmlFor="dryrun-task-type">Task Type</label>
-              <select
-                id="dryrun-task-type"
-                className="select-field"
-                value={newTaskType}
-                onChange={(e) => setNewTaskType(e.target.value)}
-              >
-                {TASK_TYPE_OPTIONS.map((tt) => (
-                  <option key={tt} value={tt}>
-                    {tt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="eval-field-group">
-            <label htmlFor="dryrun-goal">Task Goal</label>
-            <textarea
-              id="dryrun-goal"
-              className="eval-textarea"
-              rows={2}
-              value={newGoal}
-              onChange={(e) => setNewGoal(e.target.value)}
-              placeholder="Describe the bounded bug fix, feature, or refactor in 1–2 crisp sentences..."
-            />
-          </div>
-
-          <div className="eval-criteria-inputs">
-            <span className="eval-criteria-inputs-label">3 Acceptance Criteria</span>
-            <div className="eval-criteria-row">
-              <label htmlFor="dryrun-ac-1" className="eval-ac-num">
-                1.
-              </label>
+              <label htmlFor="dryrun-verify-cmd">Verification Command</label>
               <input
-                id="dryrun-ac-1"
+                id="dryrun-verify-cmd"
                 type="text"
-                className="input-field"
-                value={newAc1}
-                onChange={(e) => setNewAc1(e.target.value)}
-                placeholder="Behavior check #1 (e.g., handles empty input without raising)"
+                className="input-field eval-mono-input"
+                value={newVerifyCmd}
+                onChange={(e) => setNewVerifyCmd(e.target.value)}
+                placeholder="e.g., uv run pytest -v"
               />
             </div>
-            <div className="eval-criteria-row">
-              <label htmlFor="dryrun-ac-2" className="eval-ac-num">
-                2.
-              </label>
-              <input
-                id="dryrun-ac-2"
-                type="text"
-                className="input-field"
-                value={newAc2}
-                onChange={(e) => setNewAc2(e.target.value)}
-                placeholder="Contract check #2 (e.g., preserves existing response fields)"
-              />
-            </div>
-            <div className="eval-criteria-row">
-              <label htmlFor="dryrun-ac-3" className="eval-ac-num">
-                3.
-              </label>
-              <input
-                id="dryrun-ac-3"
-                type="text"
-                className="input-field"
-                value={newAc3}
-                onChange={(e) => setNewAc3(e.target.value)}
-                placeholder="Verification check #3 (e.g., adds unit test covering edge case)"
-              />
-            </div>
-          </div>
 
-          <div className="eval-field-group">
-            <label htmlFor="dryrun-verify-cmd">Verification Command</label>
-            <input
-              id="dryrun-verify-cmd"
-              type="text"
-              className="input-field eval-mono-input"
-              value={newVerifyCmd}
-              onChange={(e) => setNewVerifyCmd(e.target.value)}
-              placeholder="e.g., uv run pytest -v"
-            />
+            <div className="eval-criteria-inputs">
+              <span className="eval-criteria-inputs-label">
+                Acceptance Criteria <span className="muted">(up to 3 concrete pass/fail checks)</span>
+              </span>
+              <div className="eval-criteria-row">
+                <label htmlFor="dryrun-ac-1" className="eval-ac-num">
+                  1.
+                </label>
+                <input
+                  id="dryrun-ac-1"
+                  type="text"
+                  className="input-field"
+                  value={newAc1}
+                  onChange={(e) => setNewAc1(e.target.value)}
+                  placeholder="Behavior check #1 (e.g., handles empty input without raising)"
+                />
+              </div>
+              <div className="eval-criteria-row">
+                <label htmlFor="dryrun-ac-2" className="eval-ac-num">
+                  2.
+                </label>
+                <input
+                  id="dryrun-ac-2"
+                  type="text"
+                  className="input-field"
+                  value={newAc2}
+                  onChange={(e) => setNewAc2(e.target.value)}
+                  placeholder="Contract check #2 (e.g., preserves existing response fields)"
+                />
+              </div>
+              <div className="eval-criteria-row">
+                <label htmlFor="dryrun-ac-3" className="eval-ac-num">
+                  3.
+                </label>
+                <input
+                  id="dryrun-ac-3"
+                  type="text"
+                  className="input-field"
+                  value={newAc3}
+                  onChange={(e) => setNewAc3(e.target.value)}
+                  placeholder="Verification check #3 (e.g., adds unit test covering edge case)"
+                />
+              </div>
+            </div>
           </div>
 
           {createError && (
@@ -515,15 +610,13 @@ export function EvalDryRunTab({
             <div className="eval-dryrun-header">
               <div className="eval-dryrun-title-block">
                 <div className="eval-brief-badges">
-                  <span className="eval-step-badge">Step 1 · Scope</span>
+                  <span className="eval-step-badge">1</span>
                   <span className="eval-lang-badge">{activeDryRun.license}</span>
                   <span className="eval-diff-badge">{activeDryRun.task_type}</span>
                   <span
-                    className={`eval-hygiene-status ${
-                      checkedHygieneCount === HYGIENE_ITEMS.length ? "ready" : ""
-                    }`}
+                    className={`eval-hygiene-status ${allHygienePassed ? "ready" : ""}`}
                   >
-                    {checkedHygieneCount === HYGIENE_ITEMS.length
+                    {allHygienePassed
                       ? "Ready to Submit ✓"
                       : `${checkedHygieneCount}/${HYGIENE_ITEMS.length} Pre-Flight`}
                   </span>
@@ -534,17 +627,44 @@ export function EvalDryRunTab({
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="btn btn-sm eval-delete-btn"
-                data-testid="eval-dryrun-delete-btn"
-                onClick={() => handleDeleteDryRun(activeDryRun.id)}
-                aria-label={`Delete dry-run plan for ${activeDryRun.repo_name}`}
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                <span>Delete</span>
-              </button>
+              {confirmDeleteId === activeDryRun.id ? (
+                <div className="eval-delete-confirm">
+                  <button
+                    type="button"
+                    className="btn btn-sm eval-delete-btn"
+                    data-testid="eval-dryrun-confirm-delete-btn"
+                    onClick={() => handleDeleteDryRun(activeDryRun.id)}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    <span>Confirm Delete</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => setConfirmDeleteId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-sm eval-delete-btn"
+                  data-testid="eval-dryrun-delete-btn"
+                  onClick={() => setConfirmDeleteId(activeDryRun.id)}
+                  aria-label={`Delete dry-run plan for ${activeDryRun.repo_name}`}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  <span>Delete</span>
+                </button>
+              )}
             </div>
+
+            {dryRunError && (
+              <div className="feedback-box err" role="alert">
+                {dryRunError}
+              </div>
+            )}
 
             <div className="eval-dryrun-meta-grid">
               <div className="eval-brief-box">
@@ -597,7 +717,7 @@ export function EvalDryRunTab({
             <div className="eval-hygiene-section" data-testid="eval-hygiene-checklist">
               <div className="eval-hygiene-head">
                 <div className="eval-form-step-head">
-                  <span className="eval-step-badge">Step 2 · Safety</span>
+                  <span className="eval-step-badge">2</span>
                   <h4>
                     <ShieldCheck size={15} aria-hidden="true" /> 6-Point Pre-Flight Hygiene
                   </h4>
@@ -605,6 +725,20 @@ export function EvalDryRunTab({
                 <span className="eval-hygiene-counter">
                   {checkedHygieneCount}/{HYGIENE_ITEMS.length} verified
                 </span>
+              </div>
+
+              <div
+                className="progress-track eval-hygiene-progress"
+                role="progressbar"
+                aria-label="Pre-flight hygiene checklist progress"
+                aria-valuenow={hygienePct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className="progress-fill eval-confidence-fill"
+                  style={{ width: `${hygienePct}%` }}
+                />
               </div>
 
               <div className="eval-hygiene-list">
@@ -633,15 +767,28 @@ export function EvalDryRunTab({
               </div>
             </div>
 
-            {/* Step 3 · Session Notes & Markdown Export (Collapsible Drawer) */}
-            <details className="eval-examples-details" open>
-              <summary className="eval-step3-summary">
+            {/* Step 3 · Session Notes & Markdown Export (Tidy Collapsible Drawer) */}
+            <details
+              className="eval-examples-details"
+              data-testid="eval-dryrun-notes-drawer"
+              open={notesOpen}
+            >
+              <summary
+                className="eval-step3-summary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setNotesOpen((prev) => !prev);
+                }}
+              >
                 <span className="eval-form-step-head">
-                  <span className="eval-step-badge">Step 3 · Notes</span>
+                  <span className="eval-step-badge">3</span>
                   <span>
-                    <MessageSquare size={14} aria-hidden="true" /> Session Observation Log &amp;
+                    <MessageSquare size={14} aria-hidden="true" /> Session Notes &amp; Markdown
                     Export
                   </span>
+                  {allHygienePassed && !notesOpen && (
+                    <span className="eval-linter-pill ok">Ready — click to log notes</span>
+                  )}
                 </span>
                 <ChevronDown size={15} className="eval-drawer-chevron" aria-hidden="true" />
               </summary>
@@ -685,12 +832,6 @@ export function EvalDryRunTab({
                     />
                   </div>
                 </div>
-
-                {dryRunError && (
-                  <div className="feedback-box err" role="alert">
-                    {dryRunError}
-                  </div>
-                )}
 
                 <div className="eval-dryrun-actions">
                   <button

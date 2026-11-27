@@ -176,20 +176,31 @@ export const RED_FLAG_PATTERNS = [
   },
 ];
 
-export const CHOICE_OPTIONS: { value: EvalChoice; label: string; short: string }[] = [
-  { value: "strongly_a", label: "Strongly Prefer A", short: "Strongly A" },
-  { value: "slightly_a", label: "Slightly Prefer A", short: "Slightly A" },
-  { value: "tie", label: "Tie / Equal", short: "Tie" },
-  { value: "slightly_b", label: "Slightly Prefer B", short: "Slightly B" },
-  { value: "strongly_b", label: "Strongly Prefer B", short: "Strongly B" },
+export const CHOICE_OPTIONS: { value: EvalChoice; label: string; short: string; side: "a" | "tie" | "b" }[] = [
+  { value: "strongly_a", label: "Strongly Prefer A", short: "Strongly A", side: "a" },
+  { value: "slightly_a", label: "Slightly Prefer A", short: "Slightly A", side: "a" },
+  { value: "tie", label: "Tie / Equal", short: "Tie", side: "tie" },
+  { value: "slightly_b", label: "Slightly Prefer B", short: "Slightly B", side: "b" },
+  { value: "strongly_b", label: "Strongly Prefer B", short: "Strongly B", side: "b" },
 ];
 
-export const FORCED_CHOICE_OPTIONS: { value: ForcedChoiceRating | ""; label: string }[] = [
-  { value: "", label: "— Not rated —" },
+export const FORCED_CHOICE_A_OPTIONS: { value: ForcedChoiceRating; label: string }[] = [
   { value: "a_much_better", label: "A Much Better" },
   { value: "a_better", label: "A Better" },
   { value: "a_slightly_better", label: "A Slightly Better" },
   { value: "a_negligibly_better", label: "A Negligibly Better" },
+];
+
+export const FORCED_CHOICE_B_OPTIONS: { value: ForcedChoiceRating; label: string }[] = [
+  { value: "b_much_better", label: "B Much Better" },
+  { value: "b_better", label: "B Better" },
+  { value: "b_slightly_better", label: "B Slightly Better" },
+  { value: "b_negligibly_better", label: "B Negligibly Better" },
+];
+
+export const FORCED_CHOICE_OPTIONS: { value: ForcedChoiceRating | ""; label: string }[] = [
+  { value: "", label: "— Skip / Unrated —" },
+  ...FORCED_CHOICE_A_OPTIONS,
   { value: "b_negligibly_better", label: "B Negligibly Better" },
   { value: "b_slightly_better", label: "B Slightly Better" },
   { value: "b_better", label: "B Better" },
@@ -200,6 +211,41 @@ export const FORCED_CHOICE_OPTIONS: { value: ForcedChoiceRating | ""; label: str
 export const FORCED_CHOICE_LABEL_MAP: Record<string, string> = Object.fromEntries(
   FORCED_CHOICE_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
 );
+
+const SHORT_SCENARIO_TITLES: Record<string, string> = {
+  "eval-py-async-timer": "Async Timer Race",
+  "eval-fastapi-rate-limit": "Rate Limiter Contract",
+  "eval-py-test-cheat": "TTL Cache Hack",
+  "eval-react-silent-reload": "React Draft Reload",
+  "eval-sql-window-topn": "SQL Top-N Window",
+  "eval-bash-strict-refactor": "Bash Strict Quoting",
+};
+
+export function formatShortScenarioTitle(id: string, fullTitle: string): string {
+  if (SHORT_SCENARIO_TITLES[id]) return SHORT_SCENARIO_TITLES[id];
+  const cleaned = (fullTitle || "").trim();
+  return cleaned.length > 26 ? `${cleaned.slice(0, 24).trimEnd()}…` : cleaned;
+}
+
+export function extractCitedLines(text: string): Set<string> {
+  const cited = new Set<string>();
+  const matches = text.matchAll(/\[([AB]\d+)\]/gi);
+  for (const m of matches) {
+    if (m[1]) cited.add(m[1].toUpperCase());
+  }
+  return cited;
+}
+
+export const DRY_RUN_SAMPLE_TEMPLATE = {
+  repo_name: "example-oss/json-cli",
+  license: "MIT",
+  task_type: "Bug Fix",
+  goal: "Handle empty stdin cleanly without raising a JSONDecodeError, while preserving existing CLI exit codes.",
+  ac1: "Empty stdin exits 0 and prints an empty JSON array [] instead of a stack trace.",
+  ac2: "Malformed non-empty JSON still exits non-zero with a concise stderr message.",
+  ac3: "Adds deterministic unit tests covering empty, valid, and malformed stdin.",
+  verify_command: "uv run pytest -v",
+} as const;
 
 export const LICENSE_OPTIONS = ["MIT", "Apache-2.0", "BSD-3", "Other Eligible OSS"] as const;
 export const TASK_TYPE_OPTIONS = ["Bug Fix", "Feature", "Refactor"] as const;

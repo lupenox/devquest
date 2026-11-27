@@ -6,6 +6,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   ClipboardCheck,
   Code2,
@@ -14,11 +16,15 @@ import {
   Lightbulb,
   ListChecks,
   MessageSquare,
+  Plus,
   Quote,
+  RotateCcw,
   SlidersHorizontal,
   Sparkles,
+  Star,
   Tag,
   Terminal,
+  X,
   Zap,
 } from "lucide-react";
 import { api } from "../../api";
@@ -40,11 +46,14 @@ import {
   countSentences,
   copyTextSafe,
   emptyAxisRatings,
+  extractCitedLines,
+  FORCED_CHOICE_A_OPTIONS,
+  FORCED_CHOICE_B_OPTIONS,
   FORCED_CHOICE_LABEL_MAP,
-  FORCED_CHOICE_OPTIONS,
   formatDifficulty,
   formatLangLabel,
   formatRoleLabel,
+  formatShortScenarioTitle,
   hasTranscriptQuote,
   humanizeSlug,
   normalizeHighlightLang,
@@ -52,12 +61,53 @@ import {
   type PracticeMode,
 } from "./evalLabConstants";
 
+interface ScenarioDraft {
+  evidenceView: EvidenceViewMode;
+  choice: EvalChoice | null;
+  spottedTags: string[];
+  rationale: string;
+  followupPrompt: string;
+  showFollowupInQuick: boolean;
+  axisRatings: Record<string, AxisRatingInput>;
+  decidingAxes: string[];
+  seniorEngineerNote: string;
+  overallSummary: string;
+  otherIssues: string;
+}
+
+function createEmptyScenarioDraft(
+  scenario: EvalScenario | undefined,
+  behavioralAxes: BehavioralAxisDef[]
+): ScenarioDraft {
+  const hasT = Boolean(
+    scenario?.transcript_a &&
+      scenario.transcript_a.length > 0 &&
+      scenario?.transcript_b &&
+      scenario.transcript_b.length > 0
+  );
+  return {
+    evidenceView: hasT ? "transcripts" : "codediff",
+    choice: null,
+    spottedTags: [],
+    rationale: "",
+    followupPrompt: "",
+    showFollowupInQuick: false,
+    axisRatings: emptyAxisRatings(behavioralAxes),
+    decidingAxes: [],
+    seniorEngineerNote: "",
+    overallSummary: "",
+    otherIssues: "",
+  };
+}
+
 interface EvalPracticeTabProps {
   scenarios: EvalScenario[];
   behavioralAxes: BehavioralAxisDef[];
   completedCount: number;
   totalScenarios: number;
   activeScenarioId: string;
+  practiceMode?: PracticeMode;
+  onChangePracticeMode?: (mode: PracticeMode) => void;
   onSelectScenarioId: (id: string) => void;
   onCalibrated: (overview: EvalLabOverview | undefined) => void;
   onOpenDryRun: () => void;
@@ -69,41 +119,46 @@ export function EvalPracticeTab({
   completedCount,
   totalScenarios,
   activeScenarioId,
+  practiceMode: controlledMode,
+  onChangePracticeMode,
   onSelectScenarioId,
   onCalibrated,
   onOpenDryRun,
 }: EvalPracticeTabProps) {
-  const [practiceMode, setPracticeMode] = useState<PracticeMode>("quick");
-  const [evidenceView, setEvidenceView] = useState<EvidenceViewMode>("transcripts");
-  const [choice, setChoice] = useState<EvalChoice | null>(null);
-  const [spottedTags, setSpottedTags] = useState<string[]>([]);
-  const [rationale, setRationale] = useState("");
-  const [followupPrompt, setFollowupPrompt] = useState("");
+  const [localPracticeMode, setLocalPracticeMode] = useState<PracticeMode>("quick");
+  const practiceMode = controlledMode ?? localPracticeMode;
+  const setPracticeMode = (next: PracticeMode) => {
+    setLocalPracticeMode(next);
+    onChangePracticeMode?.(next);
+  };
 
-  // Deep 7-Axis & Structured Write-Up state (used in Full Live Rehearsal mode)
+  // Per-scenario unsaved drafts keyed by scenario.id so switching scenarios preserves edits
+  const [draftsByScenario, setDraftsByScenario] = useState<Record<string, ScenarioDraft>>({});
   const [axisMatrixOpen, setAxisMatrixOpen] = useState(true);
-  const [axisRatings, setAxisRatings] = useState<Record<string, AxisRatingInput>>(() =>
-    emptyAxisRatings(behavioralAxes)
-  );
-  const [decidingAxes, setDecidingAxes] = useState<string[]>([]);
   const [decidingWarn, setDecidingWarn] = useState<string | null>(null);
-  const [seniorEngineerNote, setSeniorEngineerNote] = useState("");
-  const [overallSummary, setOverallSummary] = useState("");
-  const [otherIssues, setOtherIssues] = useState("");
-  const [activeQuoteTarget, setActiveQuoteTarget] = useState<string>("rationale");
-  const [quotedFlash, setQuotedFlash] = useState<string | null>(null);
+  const [quoteTargetState, setQuoteTargetState] = useState<{ scenarioId: string; target: string }>({
+    scenarioId: "",
+    target: "rationale",
+  });
+  const [quotedFlash, setQuotedFlash] = useState<{ scenarioId: string; text: string } | null>(null);
 
-  const [submittingScenario, setSubmittingScenario] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submittingByScenario, setSubmittingByScenario] = useState<Record<string, boolean>>({});
+  const [submitErrorByScenario, setSubmitErrorByScenario] = useState<Record<string, string>>({});
   const [resultsByScenario, setResultsByScenario] = useState<Record<string, EvalSubmitResp>>({});
+  const [submittedModeByScenario, setSubmittedModeByScenario] = useState<
+    Record<string, PracticeMode>
+  >({});
   const [copiedFollowup, setCopiedFollowup] = useState(false);
 
   const calibrationRef = useRef<HTMLDivElement>(null);
+  const choiceButtonRefs = useRef<Partial<Record<EvalChoice, HTMLButtonElement | null>>>({});
   const quoteFlashTimer = useRef<number | undefined>(undefined);
+  const copiedFollowupTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     return () => {
       if (quoteFlashTimer.current) window.clearTimeout(quoteFlashTimer.current);
+      if (copiedFollowupTimer.current) window.clearTimeout(copiedFollowupTimer.current);
     };
   }, []);
 
@@ -111,44 +166,123 @@ export function EvalPracticeTab({
     () => scenarios.find((s) => s.id === activeScenarioId) || scenarios[0],
     [scenarios, activeScenarioId]
   );
+  const activeId = activeScenario?.id || "";
+  const activeIdRef = useRef<string>(activeId);
+  activeIdRef.current = activeId;
 
-  // Reset form cleanly whenever the selected scenario changes
-  const prevScenarioIdRef = useRef<string>(activeScenario?.id || "");
-  useEffect(() => {
-    const nextId = activeScenario?.id || "";
-    if (!nextId || nextId === prevScenarioIdRef.current) return;
-    prevScenarioIdRef.current = nextId;
-    setEvidenceView(
-      activeScenario?.transcript_a && activeScenario.transcript_a.length > 0
-        ? "transcripts"
-        : "codediff"
-    );
-    setChoice(null);
-    setSpottedTags([]);
-    setRationale("");
-    setFollowupPrompt("");
-    setAxisRatings(emptyAxisRatings(behavioralAxes));
-    setDecidingAxes([]);
-    setDecidingWarn(null);
-    setSeniorEngineerNote("");
-    setOverallSummary("");
-    setOtherIssues("");
-    setActiveQuoteTarget("rationale");
-    setSubmitError(null);
-    setCopiedFollowup(false);
-  }, [activeScenario, behavioralAxes]);
+  const fallbackDraft = useMemo(
+    () => createEmptyScenarioDraft(activeScenario, behavioralAxes),
+    [activeScenario, behavioralAxes]
+  );
+  const activeDraft = (activeId && draftsByScenario[activeId]) || fallbackDraft;
+  const {
+    evidenceView,
+    choice,
+    spottedTags,
+    rationale,
+    followupPrompt,
+    showFollowupInQuick,
+    axisRatings,
+    decidingAxes,
+    seniorEngineerNote,
+    overallSummary,
+    otherIssues,
+  } = activeDraft;
 
-  // If switching back to Quick Practice while quote target was Overall or Axis, reset cleanly to Critique
-  useEffect(() => {
-    if (practiceMode === "quick" && activeQuoteTarget !== "rationale") {
-      setActiveQuoteTarget("rationale");
+  const updateActiveDraft = (updater: (draft: ScenarioDraft) => ScenarioDraft) => {
+    if (!activeId) return;
+    setDraftsByScenario((prev) => {
+      const current = prev[activeId] || createEmptyScenarioDraft(activeScenario, behavioralAxes);
+      return {
+        ...prev,
+        [activeId]: updater(current),
+      };
+    });
+  };
+
+  const setEvidenceView = (next: EvidenceViewMode) =>
+    updateActiveDraft((d) => ({ ...d, evidenceView: next }));
+  const setChoice = (next: EvalChoice | null) =>
+    updateActiveDraft((d) => ({ ...d, choice: next }));
+  const setRationale = (next: string) => updateActiveDraft((d) => ({ ...d, rationale: next }));
+  const setFollowupPrompt = (next: string) =>
+    updateActiveDraft((d) => ({ ...d, followupPrompt: next }));
+  const setShowFollowupInQuick = (next: boolean) =>
+    updateActiveDraft((d) => ({ ...d, showFollowupInQuick: next }));
+  const setSeniorEngineerNote = (next: string) =>
+    updateActiveDraft((d) => ({ ...d, seniorEngineerNote: next }));
+  const setOverallSummary = (next: string) =>
+    updateActiveDraft((d) => ({ ...d, overallSummary: next }));
+  const setOtherIssues = (next: string) =>
+    updateActiveDraft((d) => ({ ...d, otherIssues: next }));
+
+  const submittingScenario = Boolean(activeId && submittingByScenario[activeId]);
+  const submitError = (activeId && submitErrorByScenario[activeId]) || null;
+  const setScenarioSubmitError = (scenarioId: string, msg: string | null) => {
+    if (!scenarioId) return;
+    setSubmitErrorByScenario((prev) => {
+      if (msg === null) {
+        if (!(scenarioId in prev)) return prev;
+        const { [scenarioId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [scenarioId]: msg };
+    });
+  };
+
+  const rawQuoteTarget =
+    quoteTargetState.scenarioId === activeId ? quoteTargetState.target : "rationale";
+  const activeQuoteTarget = useMemo(() => {
+    if (practiceMode === "quick") return "rationale";
+    if (rawQuoteTarget.startsWith("axis:")) {
+      if (!axisMatrixOpen) return "rationale";
+      const slug = rawQuoteTarget.slice(5);
+      const entry = axisRatings[slug];
+      const hasSideRating = Boolean(
+        entry?.rating && (entry.rating.startsWith("a_") || entry.rating.startsWith("b_"))
+      );
+      const hasNote = Boolean(entry?.note?.trim());
+      if (!hasSideRating && !hasNote) return "rationale";
     }
-  }, [practiceMode, activeQuoteTarget]);
+    return rawQuoteTarget;
+  }, [practiceMode, rawQuoteTarget, axisMatrixOpen, axisRatings]);
+  const setActiveQuoteTarget = (target: string) =>
+    setQuoteTargetState({ scenarioId: activeId, target });
+
+  // Clear transient UI feedback & reset quote target whenever the selected scenario changes
+  const prevScenarioIdRef = useRef<string>(activeId);
+  useEffect(() => {
+    if (!activeId || activeId === prevScenarioIdRef.current) return;
+    prevScenarioIdRef.current = activeId;
+    setDecidingWarn(null);
+    setQuoteTargetState({ scenarioId: activeId, target: "rationale" });
+    setQuotedFlash(null);
+    if (quoteFlashTimer.current) {
+      window.clearTimeout(quoteFlashTimer.current);
+      quoteFlashTimer.current = undefined;
+    }
+    if (copiedFollowupTimer.current) {
+      window.clearTimeout(copiedFollowupTimer.current);
+      copiedFollowupTimer.current = undefined;
+    }
+    setCopiedFollowup(false);
+  }, [activeId]);
+
+  // Persist sanitized quote target so re-expanding a collapsed matrix or re-rating an axis never revives a stale target
+  useEffect(() => {
+    if (
+      activeId &&
+      (quoteTargetState.scenarioId !== activeId || quoteTargetState.target !== activeQuoteTarget)
+    ) {
+      setQuoteTargetState({ scenarioId: activeId, target: activeQuoteTarget });
+    }
+  }, [activeId, quoteTargetState.scenarioId, quoteTargetState.target, activeQuoteTarget]);
 
   const activeResult = activeScenario ? resultsByScenario[activeScenario.id] : undefined;
   const activeScenarioIdx = activeScenario
     ? scenarios.findIndex((s) => s.id === activeScenario.id)
     : -1;
+  const prevScenario = activeScenarioIdx > 0 ? scenarios[activeScenarioIdx - 1] : null;
   const nextScenario =
     activeScenarioIdx >= 0 && activeScenarioIdx + 1 < scenarios.length
       ? scenarios[activeScenarioIdx + 1]
@@ -168,14 +302,20 @@ export function EvalPracticeTab({
   const overallSentenceOk = overallSentenceCount >= 5 && overallSentenceCount <= 7;
   const overallNamesBothModels =
     /\bmodel\s*a\b/i.test(overallSummary) && /\bmodel\s*b\b/i.test(overallSummary);
-  const combinedWriteupText = useMemo(() => {
+  const visibleWriteupText = useMemo(() => {
+    if (practiceMode === "quick") {
+      return rationale;
+    }
     const axisNotes = Object.values(axisRatings)
       .map((a) => a.note)
       .join(" ");
     return `${rationale} ${overallSummary} ${axisNotes}`;
-  }, [rationale, overallSummary, axisRatings]);
-  const quoteDetected = hasTranscriptQuote(combinedWriteupText);
+  }, [practiceMode, rationale, overallSummary, axisRatings]);
+  const quoteDetected = hasTranscriptQuote(visibleWriteupText);
+  const citedLines = useMemo(() => extractCitedLines(visibleWriteupText), [visibleWriteupText]);
   const ratedAxesCount = Object.values(axisRatings).filter((a) => Boolean(a.rating)).length;
+  const hasAnyAxisNote = Object.values(axisRatings).some((a) => Boolean(a.note.trim()));
+  const unratedAxesCount = behavioralAxes.filter((ax) => !axisRatings[ax.slug]?.rating).length;
 
   const quoteTargetLabel = useMemo(() => {
     if (activeQuoteTarget === "overall") return "Overall Verdict";
@@ -198,37 +338,111 @@ export function EvalPracticeTab({
   }, [activeScenario]);
 
   const toggleTag = (slug: string) => {
-    setSpottedTags((prev) =>
-      prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
-    );
+    updateActiveDraft((d) => ({
+      ...d,
+      spottedTags: d.spottedTags.includes(slug)
+        ? d.spottedTags.filter((item) => item !== slug)
+        : [...d.spottedTags, slug],
+    }));
   };
 
   const updateAxisRating = (slug: BehavioralAxisSlug, rating: ForcedChoiceRating | "") => {
-    setAxisRatings((prev) => ({
-      ...prev,
-      [slug]: { rating, note: prev[slug]?.note || "" },
+    const currentNote = axisRatings[slug]?.note || "";
+    const clearsAxis = !rating || rating === "na";
+    const removedDeciding = clearsAxis && decidingAxes.includes(slug);
+    updateActiveDraft((d) => ({
+      ...d,
+      axisRatings: {
+        ...d.axisRatings,
+        [slug]: { rating, note: d.axisRatings[slug]?.note || "" },
+      },
+      decidingAxes: clearsAxis
+        ? d.decidingAxes.filter((item) => item !== slug)
+        : d.decidingAxes,
     }));
+    if (removedDeciding) {
+      setDecidingWarn(null);
+    }
+    if (clearsAxis && activeQuoteTarget === `axis:${slug}` && !currentNote.trim()) {
+      setActiveQuoteTarget("rationale");
+    }
+  };
+
+  const handleChoiceKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, currentIdx: number) => {
+    let nextIdx: number | null = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      nextIdx = (currentIdx + 1) % CHOICE_OPTIONS.length;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      nextIdx = (currentIdx - 1 + CHOICE_OPTIONS.length) % CHOICE_OPTIONS.length;
+    } else if (e.key === "Home") {
+      nextIdx = 0;
+    } else if (e.key === "End") {
+      nextIdx = CHOICE_OPTIONS.length - 1;
+    }
+    if (nextIdx !== null) {
+      e.preventDefault();
+      const target = CHOICE_OPTIONS[nextIdx];
+      setChoice(target.value);
+      setScenarioSubmitError(activeId, null);
+      choiceButtonRefs.current[target.value]?.focus();
+    }
   };
 
   const updateAxisNote = (slug: BehavioralAxisSlug, note: string) => {
-    setAxisRatings((prev) => ({
-      ...prev,
-      [slug]: { rating: prev[slug]?.rating || "", note },
+    updateActiveDraft((d) => ({
+      ...d,
+      axisRatings: {
+        ...d.axisRatings,
+        [slug]: { rating: d.axisRatings[slug]?.rating || "", note },
+      },
     }));
   };
 
+  const markUnratedAxesNa = () => {
+    updateActiveDraft((d) => {
+      const next = { ...d.axisRatings };
+      for (const ax of behavioralAxes) {
+        const cur = next[ax.slug] || { rating: "", note: "" };
+        if (!cur.rating) {
+          next[ax.slug] = { ...cur, rating: "na" };
+        }
+      }
+      return { ...d, axisRatings: next };
+    });
+  };
+
+  const resetAllAxes = () => {
+    updateActiveDraft((d) => ({
+      ...d,
+      axisRatings: emptyAxisRatings(behavioralAxes),
+      decidingAxes: [],
+    }));
+    setDecidingWarn(null);
+    if (activeQuoteTarget.startsWith("axis:")) {
+      setActiveQuoteTarget("rationale");
+    }
+  };
+
   const toggleDecidingAxis = (slug: string) => {
-    setDecidingAxes((prev) => {
-      if (prev.includes(slug)) {
-        setDecidingWarn(null);
-        return prev.filter((a) => a !== slug);
-      }
-      if (prev.length >= 2) {
-        setDecidingWarn("Pick at most 2 deciding axes — unselect one before adding another.");
-        return prev;
-      }
+    if (decidingAxes.includes(slug)) {
       setDecidingWarn(null);
-      return [...prev, slug];
+      updateActiveDraft((d) => ({
+        ...d,
+        decidingAxes: d.decidingAxes.filter((a) => a !== slug),
+      }));
+      return;
+    }
+    if (decidingAxes.length >= 2) {
+      setDecidingWarn("Pick at most 2 deciding axes — unselect one before adding another.");
+      return;
+    }
+    setDecidingWarn(null);
+    updateActiveDraft((d) => {
+      if (d.decidingAxes.includes(slug) || d.decidingAxes.length >= 2) return d;
+      return {
+        ...d,
+        decidingAxes: [...d.decidingAxes, slug],
+      };
     });
   };
 
@@ -236,27 +450,37 @@ export function EvalPracticeTab({
     const cleanText = item.text.replace(/\s+/g, " ").trim();
     const snippet = cleanText.length > 140 ? `${cleanText.slice(0, 137).trimEnd()}...` : cleanText;
     const quoted = `"[${item.line}] ${snippet}"`;
+    const scenarioId = activeScenario?.id || "";
 
     if (activeQuoteTarget === "overall") {
-      setOverallSummary((prev) => (prev.trim() ? `${prev.trimEnd()} ${quoted}` : quoted));
-      setQuotedFlash(`Quoted [${item.line}] into Overall Verdict`);
+      updateActiveDraft((d) => ({
+        ...d,
+        overallSummary: d.overallSummary.trim() ? `${d.overallSummary.trimEnd()} ${quoted}` : quoted,
+      }));
+      setQuotedFlash({ scenarioId, text: `Quoted [${item.line}] into Overall Verdict` });
     } else if (activeQuoteTarget.startsWith("axis:")) {
       const slug = activeQuoteTarget.slice(5) as BehavioralAxisSlug;
-      setAxisRatings((prev) => {
-        const cur = prev[slug]?.note || "";
+      updateActiveDraft((d) => {
+        const cur = d.axisRatings[slug]?.note || "";
         return {
-          ...prev,
-          [slug]: {
-            rating: prev[slug]?.rating || "",
-            note: cur.trim() ? `${cur.trimEnd()} ${quoted}` : quoted,
+          ...d,
+          axisRatings: {
+            ...d.axisRatings,
+            [slug]: {
+              rating: d.axisRatings[slug]?.rating || "",
+              note: cur.trim() ? `${cur.trimEnd()} ${quoted}` : quoted,
+            },
           },
         };
       });
       const label = behavioralAxes.find((a) => a.slug === slug)?.label || humanizeSlug(slug);
-      setQuotedFlash(`Quoted [${item.line}] into ${label} note`);
+      setQuotedFlash({ scenarioId, text: `Quoted [${item.line}] into ${label} note` });
     } else {
-      setRationale((prev) => (prev.trim() ? `${prev.trimEnd()} ${quoted}` : quoted));
-      setQuotedFlash(`Quoted [${item.line}] into Your Critique`);
+      updateActiveDraft((d) => ({
+        ...d,
+        rationale: d.rationale.trim() ? `${d.rationale.trimEnd()} ${quoted}` : quoted,
+      }));
+      setQuotedFlash({ scenarioId, text: `Quoted [${item.line}] into Your Critique` });
     }
 
     if (quoteFlashTimer.current) window.clearTimeout(quoteFlashTimer.current);
@@ -266,100 +490,154 @@ export function EvalPracticeTab({
   const handleSubmitScenario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeScenario) return;
+    const submittedScenarioId = activeScenario.id;
+    if (submittingByScenario[submittedScenarioId]) return;
     if (!choice) {
-      setSubmitError("Pick who handled this better in Step 1 before calibrating.");
+      setScenarioSubmitError(
+        submittedScenarioId,
+        "Pick who handled this better in Step 1 before calibrating."
+      );
       return;
     }
-    setSubmittingScenario(true);
-    setSubmitError(null);
+    setSubmittingByScenario((prev) => ({ ...prev, [submittedScenarioId]: true }));
+    setScenarioSubmitError(submittedScenarioId, null);
 
+    const isFullSubmit = practiceMode === "full";
     const populatedAxes: Record<string, AxisRatingInput> = {};
-    for (const [slug, val] of Object.entries(axisRatings)) {
-      if (val && (val.rating || val.note.trim())) {
-        populatedAxes[slug] = { rating: val.rating, note: val.note.trim() };
+    if (isFullSubmit) {
+      for (const [slug, val] of Object.entries(axisRatings)) {
+        if (val && (val.rating || val.note.trim())) {
+          populatedAxes[slug] = { rating: val.rating, note: val.note.trim() };
+        }
       }
     }
 
+    // Only allow deciding axes that actually favor Model A or Model B
+    const validDecidingAxes = isFullSubmit
+      ? decidingAxes.filter((slug) => {
+          const r = axisRatings[slug]?.rating || "";
+          return r.startsWith("a_") || r.startsWith("b_");
+        })
+      : [];
+
     try {
-      const resp = await api.submitEvalScenario(activeScenario.id, {
+      const resp = await api.submitEvalScenario(submittedScenarioId, {
         choice,
         spotted_tags: spottedTags,
         rationale: rationale.trim(),
         followup_prompt: followupPrompt.trim(),
-        ...(Object.keys(populatedAxes).length > 0 ? { axis_ratings: populatedAxes } : {}),
-        ...(decidingAxes.length > 0 ? { deciding_axes: decidingAxes } : {}),
-        ...(seniorEngineerNote.trim() ? { senior_engineer_note: seniorEngineerNote.trim() } : {}),
-        ...(overallSummary.trim() ? { overall_summary: overallSummary.trim() } : {}),
-        ...(otherIssues.trim() ? { other_issues: otherIssues.trim() } : {}),
+        ...(isFullSubmit && Object.keys(populatedAxes).length > 0
+          ? { axis_ratings: populatedAxes }
+          : {}),
+        ...(validDecidingAxes.length > 0 ? { deciding_axes: validDecidingAxes } : {}),
+        ...(isFullSubmit && seniorEngineerNote.trim()
+          ? { senior_engineer_note: seniorEngineerNote.trim() }
+          : {}),
+        ...(isFullSubmit && overallSummary.trim()
+          ? { overall_summary: overallSummary.trim() }
+          : {}),
+        ...(isFullSubmit && otherIssues.trim() ? { other_issues: otherIssues.trim() } : {}),
       });
-      setResultsByScenario((prev) => ({ ...prev, [activeScenario.id]: resp }));
+      setResultsByScenario((prev) => ({ ...prev, [submittedScenarioId]: resp }));
+      setSubmittedModeByScenario((prev) => ({ ...prev, [submittedScenarioId]: practiceMode }));
       onCalibrated(resp.overview);
-      window.setTimeout(() => {
-        calibrationRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 60);
+      if (activeIdRef.current === submittedScenarioId) {
+        window.setTimeout(() => {
+          if (activeIdRef.current === submittedScenarioId) {
+            calibrationRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        }, 60);
+      }
     } catch (err: any) {
-      setSubmitError(err?.message || "Could not submit your scenario review.");
+      setScenarioSubmitError(
+        submittedScenarioId,
+        err?.message || "Could not submit your scenario review."
+      );
     } finally {
-      setSubmittingScenario(false);
+      setSubmittingByScenario((prev) => {
+        const { [submittedScenarioId]: _removed, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
   const seniorRefExample =
     activeResult?.senior_engineer_example || activeScenario?.senior_engineer_example || "";
   const overallRefExample = activeResult?.overall_example || activeScenario?.overall_example || "";
-  const showDeepCalibrationOpen =
-    practiceMode === "full" ||
-    ratedAxesCount > 0 ||
-    Boolean(seniorEngineerNote.trim()) ||
-    Boolean(overallSummary.trim());
+  const resultHasDeepData = Boolean(
+    activeResult &&
+      ((activeScenario && submittedModeByScenario[activeScenario.id] === "full") ||
+        activeResult.axis_calibration?.some((row) => Boolean(row.user_rating)))
+  );
+  const showDeepCalibrationOpen = resultHasDeepData || practiceMode === "full";
+  const showFollowupBox =
+    practiceMode === "full" || showFollowupInQuick || Boolean(followupPrompt.trim());
 
   return (
     <section className="eval-section-stack">
-      {/* 1. Slim Scenario Strip */}
-      <div className="card eval-picker-card compact">
-        <div className="eval-picker-header">
-          <div className="eval-picker-title-row">
-            <h3 className="eval-section-title">Practice Scenarios</h3>
-            <span className="eval-progress-chip">
+      {/* 1. Sleek 1-Row Scenario Switcher Rail */}
+      <div className="card eval-rail-card">
+        <div className="eval-rail-top">
+          <div className="eval-rail-meta">
+            <span className="eval-rail-counter">
+              Scenario {activeScenarioIdx >= 0 ? activeScenarioIdx + 1 : 1} of{" "}
+              {scenarios.length || totalScenarios}
+            </span>
+            <span className="eval-rail-sep" aria-hidden="true">
+              ·
+            </span>
+            <span className="eval-rail-done">
               {completedCount}/{totalScenarios} calibrated
             </span>
           </div>
-          <span className="eval-picker-hint">Pick any scenario below to review Model A vs B</span>
+          <div className="eval-rail-nav">
+            <button
+              type="button"
+              className="btn btn-sm eval-rail-step-btn"
+              disabled={!prevScenario}
+              onClick={() => prevScenario && onSelectScenarioId(prevScenario.id)}
+              aria-label="Previous scenario"
+            >
+              <ChevronLeft size={14} aria-hidden="true" />
+              <span>Prev</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm eval-rail-step-btn"
+              disabled={!nextScenario}
+              onClick={() => nextScenario && onSelectScenarioId(nextScenario.id)}
+              aria-label="Next scenario"
+            >
+              <span>Next</span>
+              <ChevronRight size={14} aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
-        <div className="eval-scenarios-strip" data-testid="eval-scenarios-list">
+        <div className="eval-scenario-rail" data-testid="eval-scenarios-list">
           {scenarios.map((sc, idx) => {
             const isActive = activeScenario?.id === sc.id;
             return (
               <button
                 key={sc.id}
                 type="button"
-                className={`eval-scenario-pill compact ${isActive ? "active" : ""} ${
+                className={`eval-rail-pill ${isActive ? "active" : ""} ${
                   sc.completed ? "completed" : ""
                 }`}
                 data-testid={`eval-scenario-pill-${sc.id}`}
                 aria-pressed={isActive}
+                title={`${idx + 1}. ${sc.title} (${formatLangLabel(sc.language)}, ~${sc.estimated_minutes}m)`}
                 onClick={() => onSelectScenarioId(sc.id)}
               >
-                <span className="eval-scenario-pill-line">
-                  <strong className="eval-scenario-pill-title">
-                    {idx + 1}. {sc.title}
-                  </strong>
-                  {sc.completed && (
-                    <CheckCircle2
-                      size={14}
-                      className="eval-pill-done-icon"
-                      aria-label="Calibrated"
-                    />
-                  )}
-                </span>
-                <span className="eval-scenario-pill-sub">
-                  <span className="eval-lang-badge">{formatLangLabel(sc.language)}</span>
-                  <span>~{sc.estimated_minutes}m</span>
-                  {typeof sc.best_score === "number" && sc.completed && (
-                    <span className="eval-pill-score">{sc.best_score}/100</span>
-                  )}
-                </span>
+                <span className="eval-rail-num">{idx + 1}</span>
+                <span className="eval-rail-label">{formatShortScenarioTitle(sc.id, sc.title)}</span>
+                {sc.completed && (
+                  <CheckCircle2
+                    size={13}
+                    className="eval-pill-done-icon"
+                    aria-label="Calibrated"
+                  />
+                )}
               </button>
             );
           })}
@@ -368,61 +646,31 @@ export function EvalPracticeTab({
 
       {activeScenario && (
         <div className="eval-section-stack" data-testid="eval-scenario-active">
-          {/* 2. Concise Mission Brief + Evidence Mode Toggle */}
+          {/* 2. Clean Mission Brief */}
           <div className="card eval-brief-card compact">
             <div className="eval-brief-top">
-              <div>
-                <div className="eval-brief-badges">
-                  <span className="eval-lang-badge">
-                    {formatLangLabel(activeScenario.language)}
-                  </span>
-                  <span className="eval-diff-badge">
-                    {formatDifficulty(activeScenario.difficulty)}
-                  </span>
-                  <span className="eval-time-badge">~{activeScenario.estimated_minutes} min</span>
+              <div className="eval-brief-heading-wrap">
+                <h3 className="eval-scenario-heading">{activeScenario.title}</h3>
+                <div className="eval-brief-submeta">
+                  <span>{formatLangLabel(activeScenario.language)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatDifficulty(activeScenario.difficulty)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>~{activeScenario.estimated_minutes} min</span>
                   {activeScenario.completed && (
-                    <span className="eval-calibrated-badge">
-                      <CheckCircle2 size={12} aria-hidden="true" />
-                      Calibrated
-                    </span>
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="eval-calibrated-inline">
+                        <CheckCircle2 size={12} aria-hidden="true" />
+                        Calibrated
+                        {typeof activeScenario.best_score === "number"
+                          ? ` (${activeScenario.best_score}/100)`
+                          : ""}
+                      </span>
+                    </>
                   )}
                 </div>
-                <h3 className="eval-scenario-heading">{activeScenario.title}</h3>
               </div>
-
-              {hasTranscripts && (
-                <div
-                  className="eval-view-toggle"
-                  data-testid="eval-view-toggle"
-                  role="group"
-                  aria-label="Evidence display mode"
-                >
-                  <button
-                    type="button"
-                    className={`eval-view-btn ${
-                      effectiveEvidenceView === "transcripts" ? "active" : ""
-                    }`}
-                    data-testid="eval-view-transcripts"
-                    aria-pressed={effectiveEvidenceView === "transcripts"}
-                    onClick={() => setEvidenceView("transcripts")}
-                  >
-                    <MessageSquare size={14} aria-hidden="true" />
-                    <span>Transcripts</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`eval-view-btn ${
-                      effectiveEvidenceView === "codediff" ? "active" : ""
-                    }`}
-                    data-testid="eval-view-codediff"
-                    aria-pressed={effectiveEvidenceView === "codediff"}
-                    onClick={() => setEvidenceView("codediff")}
-                  >
-                    <Code2 size={14} aria-hidden="true" />
-                    <span>Code Diff</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className="eval-brief-two-col">
@@ -457,48 +705,90 @@ export function EvalPracticeTab({
             </div>
           </div>
 
-          {/* 3. Side-by-Side Evidence (Transcripts OR Code Diff) */}
-          {effectiveEvidenceView === "transcripts" && hasTranscripts ? (
-            <div className="eval-transcripts-wrap" data-testid="eval-transcripts-grid">
-              <div className="eval-quote-hint-bar" data-testid="eval-quote-target-bar">
-                <div className="eval-quote-hint-left">
-                  <Quote size={14} aria-hidden="true" />
-                  <span>Click any line below to insert a quote into:</span>
-                  <div className="eval-quote-targets" role="group" aria-label="Quote destination">
-                    <button
-                      type="button"
-                      className={`eval-quote-target-btn ${
-                        activeQuoteTarget === "rationale" ? "active" : ""
-                      }`}
-                      onClick={() => setActiveQuoteTarget("rationale")}
-                    >
-                      Your Critique
-                    </button>
-                    {practiceMode === "full" && (
-                      <button
-                        type="button"
-                        className={`eval-quote-target-btn ${
-                          activeQuoteTarget === "overall" ? "active" : ""
-                        }`}
-                        onClick={() => setActiveQuoteTarget("overall")}
-                      >
-                        Overall Verdict
-                      </button>
-                    )}
-                    {activeQuoteTarget.startsWith("axis:") && (
-                      <span className="eval-quote-target-btn active">{quoteTargetLabel}</span>
-                    )}
-                  </div>
+          {/* 3. Unified Evidence Toolbar + Side-by-Side Model A vs Model B */}
+          <div className="eval-evidence-block">
+            <div className="eval-evidence-toolbar">
+              {hasTranscripts && (
+                <div
+                  className="eval-view-toggle"
+                  data-testid="eval-view-toggle"
+                  role="group"
+                  aria-label="Evidence display mode"
+                >
+                  <button
+                    type="button"
+                    className={`eval-view-btn ${
+                      effectiveEvidenceView === "transcripts" ? "active" : ""
+                    }`}
+                    data-testid="eval-view-transcripts"
+                    aria-pressed={effectiveEvidenceView === "transcripts"}
+                    onClick={() => setEvidenceView("transcripts")}
+                  >
+                    <MessageSquare size={14} aria-hidden="true" />
+                    <span>Transcripts</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`eval-view-btn ${
+                      effectiveEvidenceView === "codediff" ? "active" : ""
+                    }`}
+                    data-testid="eval-view-codediff"
+                    aria-pressed={effectiveEvidenceView === "codediff"}
+                    onClick={() => setEvidenceView("codediff")}
+                  >
+                    <Code2 size={14} aria-hidden="true" />
+                    <span>Code Diff</span>
+                  </button>
                 </div>
-                {quotedFlash && (
-                  <span className="eval-quoted-flash" role="status">
-                    <Check size={13} aria-hidden="true" />
-                    {quotedFlash}
-                  </span>
-                )}
-              </div>
+              )}
 
-              <div className="eval-ab-grid">
+              {effectiveEvidenceView === "transcripts" && hasTranscripts && (
+                <div className="eval-quote-bar-inline" data-testid="eval-quote-target-bar">
+                  <Quote size={13} aria-hidden="true" />
+                  {practiceMode === "quick" ? (
+                    <span>
+                      Click any transcript line to quote into <strong>Your Critique</strong>
+                    </span>
+                  ) : (
+                    <div className="eval-quote-hint-left">
+                      <span>Click any line to quote into:</span>
+                      <div className="eval-quote-targets" role="group" aria-label="Quote destination">
+                        <button
+                          type="button"
+                          className={`eval-quote-target-btn ${
+                            activeQuoteTarget === "rationale" ? "active" : ""
+                          }`}
+                          onClick={() => setActiveQuoteTarget("rationale")}
+                        >
+                          Your Critique
+                        </button>
+                        <button
+                          type="button"
+                          className={`eval-quote-target-btn ${
+                            activeQuoteTarget === "overall" ? "active" : ""
+                          }`}
+                          onClick={() => setActiveQuoteTarget("overall")}
+                        >
+                          Overall Verdict
+                        </button>
+                        {activeQuoteTarget.startsWith("axis:") && (
+                          <span className="eval-quote-target-btn active">{quoteTargetLabel}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {quotedFlash && quotedFlash.scenarioId === activeScenario.id && (
+                    <span className="eval-quoted-flash" role="status">
+                      <Check size={13} aria-hidden="true" />
+                      {quotedFlash.text}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {effectiveEvidenceView === "transcripts" && hasTranscripts ? (
+              <div className="eval-ab-grid" data-testid="eval-transcripts-grid">
                 {(
                   [
                     {
@@ -529,84 +819,106 @@ export function EvalPracticeTab({
                     </p>
 
                     <div className="eval-transcript-list">
-                      {lines.map((item) => (
-                        <button
-                          key={item.line}
-                          type="button"
-                          className={`eval-transcript-line role-${item.role}`}
-                          data-testid={`eval-transcript-line-${item.line}`}
-                          onClick={() => insertTranscriptQuote(item)}
-                          title={`Click to quote [${item.line}] into ${quoteTargetLabel}`}
-                        >
-                          <span className="eval-line-marker">[{item.line}]</span>
-                          <span className="eval-line-body">
-                            <span className={`eval-role-badge role-${item.role}`}>
-                              {formatRoleLabel(item.role)}
+                      {lines.map((item) => {
+                        const isCited = citedLines.has(item.line.toUpperCase());
+                        return (
+                          <button
+                            key={item.line}
+                            type="button"
+                            className={`eval-transcript-line role-${item.role} ${
+                              isCited ? "is-cited" : ""
+                            }`}
+                            data-testid={`eval-transcript-line-${item.line}`}
+                            onClick={() => insertTranscriptQuote(item)}
+                            title={`Click to quote [${item.line}] into ${quoteTargetLabel}`}
+                          >
+                            <span className="eval-line-marker">[{item.line}]</span>
+                            <span className="eval-line-body">
+                              <span className="eval-line-meta-row">
+                                <span className={`eval-role-badge role-${item.role}`}>
+                                  {formatRoleLabel(item.role)}
+                                </span>
+                                {isCited ? (
+                                  <span className="eval-line-cited-badge">
+                                    <Check size={11} aria-hidden="true" /> Cited
+                                  </span>
+                                ) : (
+                                  <span className="eval-line-quote-cue" aria-hidden="true">
+                                    + Quote
+                                  </span>
+                                )}
+                              </span>
+                              <span className="eval-transcript-text">
+                                {item.role === "assistant" || item.role === "final_summary" ? (
+                                  <RichText text={item.text} />
+                                ) : (
+                                  item.text
+                                )}
+                              </span>
                             </span>
-                            <span className="eval-transcript-text">{item.text}</span>
-                          </span>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
                   </article>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="eval-ab-grid">
-              {(
-                [
-                  { side: "a", tag: "Approach A", data: activeScenario.approach_a },
-                  { side: "b", tag: "Approach B", data: activeScenario.approach_b },
-                ] as const
-              ).map(({ side, tag, data }) => (
-                <article
-                  key={side}
-                  className={`card eval-approach-card side-${side}`}
-                  data-testid={`eval-approach-${side}`}
-                >
-                  <div className="eval-approach-header">
-                    <span className={`eval-side-pill side-${side}`}>{tag}</span>
-                    {data.label && data.label.trim().toLowerCase() !== tag.toLowerCase() ? (
-                      <h4>{data.label}</h4>
-                    ) : (
-                      <span className="eval-approach-sub">Candidate Diff</span>
-                    )}
-                  </div>
-                  <p className="eval-approach-summary">
-                    <RichText text={data.summary} />
-                  </p>
-
-                  <div className="eval-approach-code">
-                    <HighlightedCode
-                      code={data.code}
-                      lang={normalizeHighlightLang(activeScenario.language)}
-                    />
-                  </div>
-
-                  <div className="eval-test-output">
-                    <div className="eval-test-output-head">
-                      <Terminal size={13} aria-hidden="true" />
-                      <span>Simulated Test Run Output</span>
+            ) : (
+              <div className="eval-ab-grid">
+                {(
+                  [
+                    { side: "a", tag: "Approach A", data: activeScenario.approach_a },
+                    { side: "b", tag: "Approach B", data: activeScenario.approach_b },
+                  ] as const
+                ).map(({ side, tag, data }) => (
+                  <article
+                    key={side}
+                    className={`card eval-approach-card side-${side}`}
+                    data-testid={`eval-approach-${side}`}
+                  >
+                    <div className="eval-approach-header">
+                      <span className={`eval-side-pill side-${side}`}>{tag}</span>
+                      {data.label && data.label.trim().toLowerCase() !== tag.toLowerCase() ? (
+                        <h4>{data.label}</h4>
+                      ) : (
+                        <span className="eval-approach-sub">Candidate Diff</span>
+                      )}
                     </div>
-                    <pre>
-                      <code>{data.test_output}</code>
-                    </pre>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+                    <p className="eval-approach-summary">
+                      <RichText text={data.summary} />
+                    </p>
 
-          {/* 4. Guided Review Form (Quick Practice default + 1-click Full Live Rehearsal) */}
+                    <div className="eval-approach-code">
+                      <HighlightedCode
+                        code={data.code}
+                        lang={normalizeHighlightLang(activeScenario.language)}
+                      />
+                    </div>
+
+                    <div className="eval-test-output">
+                      <div className="eval-test-output-head">
+                        <Terminal size={13} aria-hidden="true" />
+                        <span>Simulated Test Run Output</span>
+                      </div>
+                      <pre>
+                        <code>{data.test_output}</code>
+                      </pre>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Calm Guided Evaluation Form (Quick Review default + Progressive 7-Axis Rubric) */}
           <form className="card eval-review-form" onSubmit={handleSubmitScenario}>
             <div className="eval-form-mode-bar">
               <div>
                 <h4 className="eval-form-main-title">Your Evaluation</h4>
                 <p className="eval-form-hint">
                   {practiceMode === "quick"
-                    ? "Quick Practice: pick the winner, tag what stood out, and explain why—submit anytime."
-                    : "Full Live Rehearsal: includes the 7-Axis Matrix plus live-linter Senior & 5–7 sentence Overall boxes."}
+                    ? "Just 2 steps: pick the better model and explain why."
+                    : "Full rehearsal: rate only the axes with signal, then practice the live write-up format."}
                 </p>
               </div>
               <div
@@ -623,7 +935,7 @@ export function EvalPracticeTab({
                   onClick={() => setPracticeMode("quick")}
                 >
                   <Zap size={13} aria-hidden="true" />
-                  <span>Quick Practice</span>
+                  <span>Quick Review</span>
                 </button>
                 <button
                   type="button"
@@ -633,107 +945,135 @@ export function EvalPracticeTab({
                   onClick={() => setPracticeMode("full")}
                 >
                   <SlidersHorizontal size={13} aria-hidden="true" />
-                  <span>Full Live Rehearsal</span>
+                  <span>Full 7-Axis Rubric</span>
                 </button>
               </div>
             </div>
 
-            {/* Step 1 — Overall Preference (Required) */}
+            {/* Step 1 — Clean A ↔ B Visual Spectrum Preference (Required) */}
             <div className="eval-form-step">
               <div className="eval-form-step-head">
-                <span className="eval-step-badge">Step 1 · Required</span>
+                <span className="eval-step-badge">1</span>
                 <h4>Which model handled this better?</h4>
+                <span className="eval-req-note">Required</span>
               </div>
               <div
-                className="eval-choice-group"
+                className="eval-choice-group spectrum"
                 role="radiogroup"
                 aria-label="Pick your preference"
               >
-                {CHOICE_OPTIONS.map((opt) => {
+                {CHOICE_OPTIONS.map((opt, idx) => {
                   const selected = choice === opt.value;
+                  const isFocusable = selected || (!choice && idx === 0);
                   return (
                     <button
                       key={opt.value}
+                      ref={(el) => {
+                        choiceButtonRefs.current[opt.value] = el;
+                      }}
                       type="button"
                       role="radio"
                       aria-checked={selected}
-                      className={`eval-choice-btn ${selected ? "selected" : ""}`}
+                      aria-label={opt.label}
+                      tabIndex={isFocusable ? 0 : -1}
+                      className={`eval-choice-btn side-${opt.side} ${selected ? "selected" : ""}`}
                       data-testid={`eval-choice-${opt.value}`}
                       onClick={() => {
                         setChoice(opt.value);
-                        setSubmitError(null);
+                        setScenarioSubmitError(activeId, null);
                       }}
+                      onKeyDown={(e) => handleChoiceKeyDown(e, idx)}
                     >
                       <span className="eval-choice-dot" aria-hidden="true" />
-                      <span>{opt.label}</span>
+                      <span>{opt.short}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Step 2 — Tag Signals & Short Critique */}
+            {/* Step 2 — Primary Critique + Understated Optional Signals */}
             <div className="eval-form-step">
               <div className="eval-form-step-head">
-                <span className="eval-step-badge">Step 2</span>
-                <h4>Tag What You Spotted &amp; Explain Why</h4>
-                <span className="eval-tag-count">{spottedTags.length} tags selected</span>
+                <span className="eval-step-badge">2</span>
+                <h4>Explain Why</h4>
+                <span className={`eval-linter-pill ${quoteDetected ? "ok" : "neutral"}`}>
+                  {quoteDetected ? (
+                    <>
+                      <Check size={12} aria-hidden="true" /> Quote cited
+                    </>
+                  ) : (
+                    <span>Tip: click a line above to quote</span>
+                  )}
+                </span>
               </div>
 
-              <div className="eval-tags-wrap">
-                {activeScenario.available_tags.map((tag) => {
-                  const selected = spottedTags.includes(tag.slug);
-                  return (
-                    <button
-                      key={tag.slug}
-                      type="button"
-                      aria-pressed={selected}
-                      className={`eval-tag-chip ${selected ? "selected" : ""}`}
-                      data-testid={`eval-tag-${tag.slug}`}
-                      onClick={() => toggleTag(tag.slug)}
-                    >
-                      <Tag size={13} aria-hidden="true" />
-                      <span>{tag.label}</span>
-                      {selected && <Check size={13} aria-hidden="true" />}
-                    </button>
-                  );
-                })}
+              <div className="eval-field-group">
+                <label htmlFor="eval-rationale" className="eval-sr-sublabel">
+                  Your Critique{" "}
+                  <span className="muted">
+                    {practiceMode === "full"
+                      ? "(optional scratchpad if you fill Overall Verdict below)"
+                      : "(cite transcript lines or test output)"}
+                  </span>
+                </label>
+                <textarea
+                  id="eval-rationale"
+                  aria-label="Your evaluation rationale"
+                  className="eval-textarea"
+                  rows={3}
+                  value={rationale}
+                  onFocus={() => setActiveQuoteTarget("rationale")}
+                  onChange={(e) => setRationale(e.target.value)}
+                  placeholder='Example: Strongly prefer Model B because Model A claimed "[A6] tests pass" despite the failure in [A4], while Model B fixed the root cause...'
+                />
               </div>
 
-              <div className="eval-textarea-stack">
-                <div className="eval-field-group">
-                  <div className="eval-label-with-linter">
-                    <label htmlFor="eval-rationale">
-                      Your Critique{" "}
-                      <span className="muted">(cite transcript lines or test output)</span>
-                    </label>
-                    <span className={`eval-linter-pill ${quoteDetected ? "ok" : "neutral"}`}>
-                      {quoteDetected ? (
-                        <>
-                          <Check size={12} aria-hidden="true" /> Transcript quote cited
-                        </>
-                      ) : (
-                        <span>Click any line above to quote</span>
-                      )}
-                    </span>
-                  </div>
-                  <textarea
-                    id="eval-rationale"
-                    aria-label="Your evaluation rationale"
-                    className="eval-textarea"
-                    rows={3}
-                    value={rationale}
-                    onFocus={() => setActiveQuoteTarget("rationale")}
-                    onChange={(e) => setRationale(e.target.value)}
-                    placeholder='Example: Strongly prefer Model B because Model A claimed "[A4] All tests pass" despite failing output, while Model B fixed the root cause...'
-                  />
+              {/* Quiet, Clearly Optional Quick Signal Tags */}
+              <div className="eval-optional-tags-row">
+                <span className="eval-optional-label">
+                  Optional quick tags
+                  {spottedTags.length > 0 ? ` (${spottedTags.length} selected)` : ""}:
+                </span>
+                <div className="eval-tags-wrap subtle">
+                  {activeScenario.available_tags.map((tag) => {
+                    const selected = spottedTags.includes(tag.slug);
+                    return (
+                      <button
+                        key={tag.slug}
+                        type="button"
+                        aria-pressed={selected}
+                        className={`eval-tag-chip subtle ${selected ? "selected" : ""}`}
+                        data-testid={`eval-tag-${tag.slug}`}
+                        onClick={() => toggleTag(tag.slug)}
+                      >
+                        <Tag size={12} aria-hidden="true" />
+                        <span>{tag.label}</span>
+                        {selected && <Check size={12} aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                <div className="eval-field-group">
-                  <label htmlFor="eval-followup">
-                    Optional Follow-Up Prompt{" "}
-                    <span className="muted">(how you&apos;d steer the weaker assistant)</span>
-                  </label>
+              {/* Optional Follow-Up Prompt: Tucked neatly away in Quick mode, open in Full mode */}
+              {showFollowupBox ? (
+                <div className="eval-field-group eval-followup-field">
+                  <div className="eval-label-with-linter">
+                    <label htmlFor="eval-followup">
+                      Optional Follow-Up Prompt{" "}
+                      <span className="muted">(how you&apos;d steer the weaker assistant)</span>
+                    </label>
+                    {practiceMode === "quick" && !followupPrompt.trim() && (
+                      <button
+                        type="button"
+                        className="eval-inline-link muted-link"
+                        onClick={() => setShowFollowupInQuick(false)}
+                      >
+                        Hide
+                      </button>
+                    )}
+                  </div>
                   <textarea
                     id="eval-followup"
                     aria-label="Follow-up prompt"
@@ -744,39 +1084,79 @@ export function EvalPracticeTab({
                     placeholder="Example: Restore the strict expiration assertion and fix the monotonic TTL check in get()..."
                   />
                 </div>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  className="eval-add-optional-btn"
+                  data-testid="eval-toggle-followup-btn"
+                  onClick={() => setShowFollowupInQuick(true)}
+                >
+                  <Plus size={13} aria-hidden="true" />
+                  <span>Add optional follow-up steering prompt</span>
+                </button>
+              )}
             </div>
 
-            {/* Full Live Rehearsal Extension (Hidden cleanly in Quick Practice) */}
+            {/* Full 7-Axis Rubric Extension (Hidden cleanly in Quick Review) */}
             {practiceMode === "full" && (
               <>
-                {/* Step 3 — 7-Axis Forced-Choice Matrix */}
+                {/* Step 3 — Progressive 7-Axis Forced-Choice Matrix */}
                 <div className="eval-7axis-panel" data-testid="eval-7axis-matrix">
                   <div className="eval-7axis-header">
                     <div className="eval-7axis-header-left">
-                      <span className="eval-step-badge">Step 3 · 7-Axis Matrix</span>
-                      <h4>Behavioral Forced-Choice Ratings</h4>
+                      <span className="eval-step-badge">3</span>
+                      <h4>7-Axis Behavioral Rubric</h4>
                       <span className="eval-matrix-meta">
-                        {ratedAxesCount}/7 rated · Deciding: {decidingAxes.length}/2
+                        {ratedAxesCount}/7 rated · {decidingAxes.length}/2 deciding
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      aria-expanded={axisMatrixOpen}
-                      onClick={() => setAxisMatrixOpen((prev) => !prev)}
-                    >
-                      {axisMatrixOpen ? (
-                        <>
-                          <ChevronUp size={14} aria-hidden="true" /> Collapse
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown size={14} aria-hidden="true" /> Expand 7 Axes
-                        </>
+                    <div className="eval-7axis-tools">
+                      {unratedAxesCount > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          data-testid="eval-axes-mark-rest-na"
+                          onClick={markUnratedAxesNa}
+                        >
+                          Set rest N/A ({unratedAxesCount})
+                        </button>
                       )}
-                    </button>
+                      {(ratedAxesCount > 0 || decidingAxes.length > 0 || hasAnyAxisNote) && (
+                        <button
+                          type="button"
+                          className="btn btn-sm eval-quiet-btn"
+                          data-testid="eval-axes-reset"
+                          onClick={resetAllAxes}
+                          title="Clear all axis ratings and notes"
+                        >
+                          <RotateCcw size={13} aria-hidden="true" />
+                          <span>Reset</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        aria-expanded={axisMatrixOpen}
+                        onClick={() => setAxisMatrixOpen((prev) => !prev)}
+                      >
+                        {axisMatrixOpen ? (
+                          <>
+                            <ChevronUp size={14} aria-hidden="true" /> Collapse
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={14} aria-hidden="true" /> Expand 7 Axes
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
+
+                  <p className="eval-matrix-guidance">
+                    Most scenarios only have signal on 2–3 axes. Rate the ones that stood out
+                    (selecting A or B reveals its <strong>Deciding</strong> toggle and note box),
+                    then click <strong>Set rest N/A</strong>.
+                  </p>
 
                   {decidingWarn && (
                     <div className="eval-inline-warn" role="status">
@@ -790,66 +1170,119 @@ export function EvalPracticeTab({
                       {behavioralAxes.map((axis) => {
                         const entry = axisRatings[axis.slug] || { rating: "", note: "" };
                         const isDeciding = decidingAxes.includes(axis.slug);
+                        const isRatedA = entry.rating.startsWith("a_");
+                        const isRatedB = entry.rating.startsWith("b_");
+                        const isRatedNa = entry.rating === "na";
+                        const canMarkDeciding = isRatedA || isRatedB;
+                        const showAxisDetail = canMarkDeciding || Boolean(entry.note.trim());
+                        const decidingAtCap = decidingAxes.length >= 2 && !isDeciding;
+
                         return (
                           <div
                             key={axis.slug}
-                            className={`eval-7axis-row ${isDeciding ? "is-deciding" : ""}`}
+                            className={`eval-7axis-row progressive ${
+                              isRatedA ? "rated-a" : isRatedB ? "rated-b" : isRatedNa ? "rated-na" : ""
+                            } ${isDeciding ? "is-deciding" : ""}`}
                           >
-                            <div className="eval-7axis-info" title={axis.description}>
-                              <div className="eval-7axis-label-line">
-                                <strong>{axis.label}</strong>
-                                {axis.slug === "clarity" && (
-                                  <span className="eval-clarity-pill">Final Summary</span>
-                                )}
+                            <div className="eval-7axis-main">
+                              <div className="eval-7axis-info" title={axis.description}>
+                                <div className="eval-7axis-label-line">
+                                  <strong>{axis.label}</strong>
+                                  {axis.slug === "clarity" && (
+                                    <span className="eval-clarity-pill">Final Summary Only</span>
+                                  )}
+                                </div>
+                                <small>{AXIS_SHORT_HINTS[axis.slug] || axis.description}</small>
                               </div>
-                              <small>{AXIS_SHORT_HINTS[axis.slug] || axis.description}</small>
+
+                              <select
+                                className="select-field eval-axis-select"
+                                data-testid={`eval-axis-select-${axis.slug}`}
+                                aria-label={`${axis.label} forced-choice rating`}
+                                value={entry.rating}
+                                onChange={(e) =>
+                                  updateAxisRating(
+                                    axis.slug,
+                                    e.target.value as ForcedChoiceRating | ""
+                                  )
+                                }
+                              >
+                                <option value="">— Skip / Unrated —</option>
+                                <optgroup label="Model A Better">
+                                  {FORCED_CHOICE_A_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="Model B Better">
+                                  {FORCED_CHOICE_B_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <option value="na">N/A (No signal)</option>
+                              </select>
                             </div>
 
-                            <select
-                              className="select-field eval-axis-select"
-                              data-testid={`eval-axis-select-${axis.slug}`}
-                              aria-label={`${axis.label} forced-choice rating`}
-                              value={entry.rating}
-                              onChange={(e) =>
-                                updateAxisRating(
-                                  axis.slug,
-                                  e.target.value as ForcedChoiceRating | ""
-                                )
-                              }
-                            >
-                              {FORCED_CHOICE_OPTIONS.map((opt) => (
-                                <option key={opt.value || "none"} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
+                            {showAxisDetail && (
+                              <div
+                                className={`eval-7axis-detail ${
+                                  canMarkDeciding ? "" : "note-only"
+                                }`}
+                              >
+                                {canMarkDeciding && (
+                                  <button
+                                    type="button"
+                                    className={`eval-deciding-btn ${isDeciding ? "active" : ""} ${
+                                      decidingAtCap ? "capped" : ""
+                                    }`}
+                                    data-testid={`eval-axis-deciding-${axis.slug}`}
+                                    aria-pressed={isDeciding}
+                                    title={
+                                      decidingAtCap
+                                        ? "2 deciding axes already selected — unselect one first"
+                                        : "Mark as one of up to 2 deciding axes"
+                                    }
+                                    onClick={() => toggleDecidingAxis(axis.slug)}
+                                  >
+                                    <Star
+                                      size={12}
+                                      fill={isDeciding ? "currentColor" : "none"}
+                                      aria-hidden="true"
+                                    />
+                                    <span>{isDeciding ? "Deciding" : "Mark Deciding"}</span>
+                                  </button>
+                                )}
 
-                            <button
-                              type="button"
-                              className={`eval-deciding-btn ${isDeciding ? "active" : ""}`}
-                              data-testid={`eval-axis-deciding-${axis.slug}`}
-                              aria-pressed={isDeciding}
-                              onClick={() => toggleDecidingAxis(axis.slug)}
-                            >
-                              {isDeciding ? (
-                                <>
-                                  <Check size={12} aria-hidden="true" /> Deciding
-                                </>
-                              ) : (
-                                <span>Deciding</span>
-                              )}
-                            </button>
+                                <input
+                                  type="text"
+                                  className="input-field eval-axis-note-input"
+                                  data-testid={`eval-axis-note-${axis.slug}`}
+                                  aria-label={`${axis.label} cited note`}
+                                  value={entry.note}
+                                  onFocus={() => setActiveQuoteTarget(`axis:${axis.slug}`)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.preventDefault();
+                                  }}
+                                  onChange={(e) => updateAxisNote(axis.slug, e.target.value)}
+                                  placeholder={`1-line quote-backed note for ${axis.label}…`}
+                                />
 
-                            <input
-                              type="text"
-                              className="input-field eval-axis-note-input"
-                              data-testid={`eval-axis-note-${axis.slug}`}
-                              aria-label={`${axis.label} cited note`}
-                              value={entry.note}
-                              onFocus={() => setActiveQuoteTarget(`axis:${axis.slug}`)}
-                              onChange={(e) => updateAxisNote(axis.slug, e.target.value)}
-                              placeholder={`1-line quote-backed note for ${axis.label}…`}
-                            />
+                                {!canMarkDeciding && entry.note.trim() && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm eval-quiet-btn"
+                                    aria-label={`Clear ${axis.label} note`}
+                                    title={`Clear ${axis.label} note`}
+                                    onClick={() => updateAxisNote(axis.slug, "")}
+                                  >
+                                    <X size={12} aria-hidden="true" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -864,12 +1297,11 @@ export function EvalPracticeTab({
                 >
                   <div className="eval-structured-head">
                     <div className="eval-form-step-head">
-                      <span className="eval-step-badge">Step 4 · Live Write-Ups</span>
-                      <h5>Structured Write-Up Rehearsal (Live Linters)</h5>
+                      <span className="eval-step-badge">4</span>
+                      <h5>Live-Session Write-Up Rehearsal</h5>
                     </div>
                     <span className="muted">
-                      Practice the exact neutral Senior Engineer &amp; 5–7 sentence Overall Verdict
-                      format
+                      Live linters check neutral Senior Approach &amp; 5–7 sentence Overall Verdict
                     </span>
                   </div>
 
@@ -901,7 +1333,7 @@ export function EvalPracticeTab({
                             Neutral (no Model A/B)
                           </>
                         ) : (
-                          <span>Must not mention Model A or Model B</span>
+                          <span>Keep neutral — no Model A or Model B</span>
                         )}
                       </span>
                     </div>
@@ -945,7 +1377,7 @@ export function EvalPracticeTab({
                         data-testid="eval-overall-sentences"
                       >
                         {overallSentenceCount}{" "}
-                        {overallSentenceCount === 1 ? "sentence" : "sentences"} — aim for 5–7
+                        {overallSentenceCount === 1 ? "sentence" : "sentences"} (aim 5–7)
                       </span>
                       <span
                         className={`eval-linter-pill ${
@@ -954,10 +1386,10 @@ export function EvalPracticeTab({
                       >
                         {overallNamesBothModels ? (
                           <>
-                            <Check size={12} aria-hidden="true" /> Model A &amp; Model B named
+                            <Check size={12} aria-hidden="true" /> Model A &amp; B named
                           </>
                         ) : (
-                          <span>Name both Model A &amp; Model B</span>
+                          <span>Name Model A &amp; B</span>
                         )}
                       </span>
                       <span
@@ -974,10 +1406,10 @@ export function EvalPracticeTab({
                       <span className={`eval-linter-pill ${quoteDetected ? "ok" : "neutral"}`}>
                         {quoteDetected ? (
                           <>
-                            <Check size={12} aria-hidden="true" /> Quote detected
+                            <Check size={12} aria-hidden="true" /> Quote cited
                           </>
                         ) : (
-                          <span>Click a line to quote</span>
+                          <span>Cite a line</span>
                         )}
                       </span>
                     </div>
@@ -994,6 +1426,9 @@ export function EvalPracticeTab({
                       aria-label="Other behavioral issues"
                       className="input-field"
                       value={otherIssues}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.preventDefault();
+                      }}
                       onChange={(e) => setOtherIssues(e.target.value)}
                       placeholder="Leave blank unless real (e.g., repeated looping tool calls not covered above)"
                     />
@@ -1026,30 +1461,17 @@ export function EvalPracticeTab({
               <div className="eval-readiness-summary" aria-live="polite">
                 {!choice ? (
                   <span className="eval-submit-hint">
-                    Pick a preference in Step 1 to enable calibration.
+                    Pick a model in Step 1 to enable calibration.
                   </span>
-                ) : (
-                  <span className="eval-ready-pills">
-                    <span className="eval-linter-pill ok">
-                      <Check size={11} aria-hidden="true" /> Preference set
-                    </span>
-                    {spottedTags.length > 0 && (
-                      <span className="eval-linter-pill ok">{spottedTags.length} tags</span>
-                    )}
-                    {quoteDetected && (
-                      <span className="eval-linter-pill ok">Quote cited</span>
-                    )}
-                    {practiceMode === "quick" && (
-                      <button
-                        type="button"
-                        className="eval-inline-link"
-                        onClick={() => setPracticeMode("full")}
-                      >
-                        Want 7-axis practice? Switch to Full Rehearsal
-                      </button>
-                    )}
-                  </span>
-                )}
+                ) : practiceMode === "quick" ? (
+                  <button
+                    type="button"
+                    className="eval-inline-link"
+                    onClick={() => setPracticeMode("full")}
+                  >
+                    Want 7-axis practice? Switch to Full 7-Axis Rubric
+                  </button>
+                ) : null}
               </div>
             </div>
           </form>
@@ -1262,7 +1684,7 @@ export function EvalPracticeTab({
                     <div className="eval-examples-body">
                       <div className="eval-axis-cal-list">
                         {activeResult.axis_calibration.map((row) => (
-                          <div key={row.axis} className="eval-axis-cal-row">
+                          <div key={row.axis} className="eval-axis-cal-row compact-key">
                             <div className="eval-axis-cal-name">
                               <strong>{row.label}</strong>
                               {row.deciding && (
@@ -1274,7 +1696,7 @@ export function EvalPracticeTab({
                                 ? "N/A"
                                 : `Model ${row.expected_winner.toUpperCase()}`}
                             </span>
-                            <span className="eval-axis-cal-why" style={{ gridColumn: "span 3" }}>
+                            <span className="eval-axis-cal-why">
                               <RichText text={row.why} />
                             </span>
                           </div>
@@ -1363,10 +1785,17 @@ export function EvalPracticeTab({
                             type="button"
                             className="btn btn-sm"
                             onClick={async () => {
+                              const copiedForId = activeScenario.id;
                               const ok = await copyTextSafe(activeResult.sample_followup);
-                              if (ok) {
+                              if (ok && activeIdRef.current === copiedForId) {
                                 setCopiedFollowup(true);
-                                window.setTimeout(() => setCopiedFollowup(false), 2000);
+                                if (copiedFollowupTimer.current) {
+                                  window.clearTimeout(copiedFollowupTimer.current);
+                                }
+                                copiedFollowupTimer.current = window.setTimeout(
+                                  () => setCopiedFollowup(false),
+                                  2000
+                                );
                               }
                             }}
                           >

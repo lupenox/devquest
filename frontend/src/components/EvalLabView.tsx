@@ -16,6 +16,7 @@ import {
   DEFAULT_LADDER,
   formatLadderTitle,
   type EvalSubTab,
+  type PracticeMode,
 } from "./eval-lab/evalLabConstants";
 import { EvalPlaybookTab } from "./eval-lab/EvalPlaybookTab";
 import { EvalPracticeTab } from "./eval-lab/EvalPracticeTab";
@@ -30,16 +31,20 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<EvalSubTab>("playbook");
+  const [visitedTabs, setVisitedTabs] = useState<Set<EvalSubTab>>(() => new Set(["playbook"]));
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("quick");
   const [activeScenarioId, setActiveScenarioId] = useState<string>("");
   const [dryRuns, setDryRuns] = useState<EvalDryRun[]>([]);
   const [activeDryRunId, setActiveDryRunId] = useState<string>("");
 
   const userPickedTabRef = useRef(false);
   const initialLandingAppliedRef = useRef(false);
+  const tabButtonRefs = useRef<Partial<Record<EvalSubTab, HTMLButtonElement | null>>>({});
 
   const selectTab = useCallback((tab: EvalSubTab) => {
     userPickedTabRef.current = true;
     setActiveTab(tab);
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
   }, []);
 
   const loadEvalLab = useCallback(async (silent = false) => {
@@ -60,11 +65,12 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
         return runs[0]?.id || "";
       });
 
-      // Smart landing: show "1. How It Works" for newcomers; jump straight to Practice once >= 1 calibrated
+      // Smart landing: show "How It Works" for newcomers; jump straight to Practice once >= 1 calibrated
       if (!initialLandingAppliedRef.current && !userPickedTabRef.current) {
         initialLandingAppliedRef.current = true;
         if ((data.completed_count ?? 0) >= 1) {
           setActiveTab("practice");
+          setVisitedTabs((prev) => (prev.has("practice") ? prev : new Set([...prev, "practice"])));
         }
       }
     } catch (err: any) {
@@ -89,6 +95,30 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
   const totalScenarios = overview?.total_scenarios ?? (scenarios.length || 6);
   const ladderItems = overview?.ladder && overview.ladder.length > 0 ? overview.ladder : DEFAULT_LADDER;
   const nextMilestoneIdx = ladderItems.findIndex((item) => !item.done);
+  const firstIncompleteIdx = scenarios.findIndex((s) => !s.completed);
+  const nextScenarioNumber = firstIncompleteIdx >= 0 ? firstIncompleteIdx + 1 : 1;
+  const nextScenarioMinutes =
+    firstIncompleteIdx >= 0
+      ? scenarios[firstIncompleteIdx]?.estimated_minutes || 5
+      : scenarios[0]?.estimated_minutes || 5;
+
+  const TAB_ORDER: EvalSubTab[] = ["playbook", "practice", "dryrun"];
+
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, current: EvalSubTab) => {
+    const idx = TAB_ORDER.indexOf(current);
+    if (idx < 0) return;
+    let nextIdx: number | null = null;
+    if (e.key === "ArrowRight") nextIdx = (idx + 1) % TAB_ORDER.length;
+    else if (e.key === "ArrowLeft") nextIdx = (idx - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    else if (e.key === "Home") nextIdx = 0;
+    else if (e.key === "End") nextIdx = TAB_ORDER.length - 1;
+    if (nextIdx !== null) {
+      e.preventDefault();
+      const targetTab = TAB_ORDER[nextIdx];
+      selectTab(targetTab);
+      tabButtonRefs.current[targetTab]?.focus();
+    }
+  };
 
   const handleStartScenarioOne = () => {
     const first = scenarios.find((s) => !s.completed) || scenarios[0];
@@ -121,7 +151,7 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
 
   return (
     <div className="eval-lab-shell">
-      {/* Compact Orientation Header & Interactive 4-Step Progress Bar */}
+      {/* Calm Orientation Header, Primary 3-Tab Switcher & Quiet Milestone Trail */}
       <section className="card eval-hero compact" data-testid="eval-lab-hero">
         <div className="eval-hero-top">
           <div className="eval-hero-copy">
@@ -133,8 +163,8 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
               <h2>AI Code Eval Lab</h2>
             </div>
             <p className="eval-subtitle">
-              Learn the 7 behavioral signals, compare Model A vs B transcripts, and verify your own
-              repo before starting a live session.
+              Compare Model A vs B transcripts, calibrate against a senior key, and prep your repo
+              before going live.
             </p>
           </div>
 
@@ -170,9 +200,71 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
           </div>
         </div>
 
-        {/* Interactive Slim 4-Step Confidence Ladder */}
+        {/* Single Clear 3-Section Navigation Bar */}
+        <div className="eval-subtabs" role="tablist" aria-label="AI Code Eval Lab sections">
+          <button
+            ref={(el) => {
+              tabButtonRefs.current.playbook = el;
+            }}
+            id="eval-tab-btn-playbook"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "playbook"}
+            aria-controls="eval-panel-playbook"
+            tabIndex={activeTab === "playbook" ? 0 : -1}
+            className={`eval-subtab ${activeTab === "playbook" ? "active" : ""}`}
+            data-testid="eval-tab-playbook"
+            onClick={() => selectTab("playbook")}
+            onKeyDown={(e) => handleTabKeyDown(e, "playbook")}
+          >
+            <BookOpen size={15} aria-hidden="true" />
+            <span>How It Works</span>
+          </button>
+          <button
+            ref={(el) => {
+              tabButtonRefs.current.practice = el;
+            }}
+            id="eval-tab-btn-practice"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "practice"}
+            aria-controls="eval-panel-practice"
+            tabIndex={activeTab === "practice" ? 0 : -1}
+            className={`eval-subtab ${activeTab === "practice" ? "active" : ""}`}
+            data-testid="eval-tab-practice"
+            onClick={() => selectTab("practice")}
+            onKeyDown={(e) => handleTabKeyDown(e, "practice")}
+          >
+            <Code2 size={15} aria-hidden="true" />
+            <span>Practice A/B</span>
+            <span className="eval-tab-count">
+              {completedCount}/{totalScenarios}
+            </span>
+          </button>
+          <button
+            ref={(el) => {
+              tabButtonRefs.current.dryrun = el;
+            }}
+            id="eval-tab-btn-dryrun"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "dryrun"}
+            aria-controls="eval-panel-dryrun"
+            tabIndex={activeTab === "dryrun" ? 0 : -1}
+            className={`eval-subtab ${activeTab === "dryrun" ? "active" : ""}`}
+            data-testid="eval-tab-dryrun"
+            onClick={() => selectTab("dryrun")}
+            onKeyDown={(e) => handleTabKeyDown(e, "dryrun")}
+          >
+            <Wrench size={15} aria-hidden="true" />
+            <span>Prep My Repo</span>
+            {dryRuns.length > 0 && <span className="eval-tab-count">{dryRuns.length}</span>}
+          </button>
+        </div>
+
+        {/* Quiet Inline Milestone Progress Trail (Progress Feedback, Not Competing Tabs) */}
         <ol
-          className="eval-ladder-grid slim"
+          className="eval-milestone-trail"
           data-testid="eval-confidence-ladder"
           aria-label="Confidence Ladder"
         >
@@ -181,64 +273,28 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
             return (
               <li
                 key={milestone.id}
-                className={`eval-ladder-step ${milestone.done ? "done" : ""} ${
+                className={`eval-milestone-item ${milestone.done ? "done" : ""} ${
                   isCurrent ? "current" : ""
                 }`}
                 data-testid={`eval-ladder-${milestone.id}`}
               >
                 <button
                   type="button"
-                  className="eval-ladder-btn"
+                  className="eval-milestone-link"
                   onClick={() => handleMilestoneClick(milestone.id)}
-                  title={milestone.done ? "Completed milestone" : "Click to work on this step"}
+                  title={milestone.done ? "Completed milestone" : "Jump to this step"}
                 >
-                  <span className="eval-ladder-dot" aria-hidden="true">
-                    {milestone.done ? <Check size={12} /> : idx + 1}
+                  <span className="eval-milestone-dot" aria-hidden="true">
+                    {milestone.done ? <Check size={10} /> : null}
                   </span>
-                  <span className="eval-ladder-title">{formatLadderTitle(milestone.title, idx)}</span>
+                  <span className="eval-milestone-label">
+                    {formatLadderTitle(milestone.title, idx)}
+                  </span>
                 </button>
               </li>
             );
           })}
         </ol>
-
-        {/* Numbered 3-Step Segmented Workflow Tabs */}
-        <div className="eval-subtabs" role="tablist" aria-label="AI Code Eval Lab sections">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "playbook"}
-            className={`eval-subtab ${activeTab === "playbook" ? "active" : ""}`}
-            data-testid="eval-tab-playbook"
-            onClick={() => selectTab("playbook")}
-          >
-            <BookOpen size={15} aria-hidden="true" />
-            <span>1. How It Works</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "practice"}
-            className={`eval-subtab ${activeTab === "practice" ? "active" : ""}`}
-            data-testid="eval-tab-practice"
-            onClick={() => selectTab("practice")}
-          >
-            <Code2 size={15} aria-hidden="true" />
-            <span>2. Practice A/B ({totalScenarios})</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "dryrun"}
-            className={`eval-subtab ${activeTab === "dryrun" ? "active" : ""}`}
-            data-testid="eval-tab-dryrun"
-            onClick={() => selectTab("dryrun")}
-          >
-            <Wrench size={15} aria-hidden="true" />
-            <span>3. Prep My Repo</span>
-            {dryRuns.length > 0 && <span className="eval-tab-count">{dryRuns.length}</span>}
-          </button>
-        </div>
       </section>
 
       {loadError && (
@@ -261,35 +317,65 @@ export function EvalLabView({ onUpdated }: EvalLabViewProps) {
         </div>
       ) : null}
 
-      {activeTab === "playbook" && (
-        <EvalPlaybookTab
-          behavioralAxes={behavioralAxes}
-          onStartScenarioOne={handleStartScenarioOne}
-          onOpenDryRun={() => selectTab("dryrun")}
-        />
+      {visitedTabs.has("playbook") && (
+        <div
+          id="eval-panel-playbook"
+          role="tabpanel"
+          aria-labelledby="eval-tab-btn-playbook"
+          className="eval-tabpanel"
+          hidden={activeTab !== "playbook"}
+        >
+          <EvalPlaybookTab
+            behavioralAxes={behavioralAxes}
+            completedCount={completedCount}
+            totalScenarios={totalScenarios}
+            nextScenarioNumber={nextScenarioNumber}
+            nextScenarioMinutes={nextScenarioMinutes}
+            onStartScenarioOne={handleStartScenarioOne}
+            onOpenDryRun={() => selectTab("dryrun")}
+          />
+        </div>
       )}
 
-      {activeTab === "practice" && (
-        <EvalPracticeTab
-          scenarios={scenarios}
-          behavioralAxes={behavioralAxes}
-          completedCount={completedCount}
-          totalScenarios={totalScenarios}
-          activeScenarioId={activeScenarioId}
-          onSelectScenarioId={setActiveScenarioId}
-          onCalibrated={handleCalibrated}
-          onOpenDryRun={() => selectTab("dryrun")}
-        />
+      {visitedTabs.has("practice") && (
+        <div
+          id="eval-panel-practice"
+          role="tabpanel"
+          aria-labelledby="eval-tab-btn-practice"
+          className="eval-tabpanel"
+          hidden={activeTab !== "practice"}
+        >
+          <EvalPracticeTab
+            scenarios={scenarios}
+            behavioralAxes={behavioralAxes}
+            completedCount={completedCount}
+            totalScenarios={totalScenarios}
+            activeScenarioId={activeScenarioId}
+            practiceMode={practiceMode}
+            onChangePracticeMode={setPracticeMode}
+            onSelectScenarioId={setActiveScenarioId}
+            onCalibrated={handleCalibrated}
+            onOpenDryRun={() => selectTab("dryrun")}
+          />
+        </div>
       )}
 
-      {activeTab === "dryrun" && (
-        <EvalDryRunTab
-          dryRuns={dryRuns}
-          activeDryRunId={activeDryRunId}
-          onSelectDryRunId={setActiveDryRunId}
-          onDryRunsChange={setDryRuns}
-          onRefresh={handleDryRunRefresh}
-        />
+      {visitedTabs.has("dryrun") && (
+        <div
+          id="eval-panel-dryrun"
+          role="tabpanel"
+          aria-labelledby="eval-tab-btn-dryrun"
+          className="eval-tabpanel"
+          hidden={activeTab !== "dryrun"}
+        >
+          <EvalDryRunTab
+            dryRuns={dryRuns}
+            activeDryRunId={activeDryRunId}
+            onSelectDryRunId={setActiveDryRunId}
+            onDryRunsChange={setDryRuns}
+            onRefresh={handleDryRunRefresh}
+          />
+        </div>
       )}
     </div>
   );
